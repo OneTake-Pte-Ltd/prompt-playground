@@ -1,0 +1,391 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "prompt-template.schema.json",
+  "title": "LLM Prompt Template",
+  "description": "Schema for LLM prompt template files used in the prompt-playground. Each file fully describes a prompt: its metadata, engineering rationale, LLM parameters, and expected response format.",
+  "type": "object",
+  "required": ["template_info", "llm_parameters", "response_format"],
+  "properties": {
+    "template_info": {
+      "description": "All metadata and documentation about the prompt template, including its identity, engineering rationale, test cases, variable definitions, and security risk profile.",
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "PromptStandard_version",
+        "description",
+        "playground_prompt_id",
+        "playground_testing_url",
+        "engineering_method",
+        "performance_tests",
+        "token_expansion_ratio",
+        "input_delimiters",
+        "input_variables",
+        "risk_profile"
+      ],
+      "properties": {
+        "id": {
+          "description": "Unique, stable identifier for this prompt template. Must be kebab-case (e.g. 'fix-grammar'). Used as the filename stem and for programmatic references.",
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "name": {
+          "description": "Human-readable display name for the prompt template, written in PascalCase (e.g. 'FixGrammar'). Used in the playground UI.",
+          "type": "string",
+          "minLength": 1
+        },
+        "PromptStandard_version": {
+          "description": "Version of the PromptStandard format specification this file conforms to, in MAJOR.MINOR notation (e.g. '1.0'). Increment MINOR for backwards-compatible additions, MAJOR for breaking changes.",
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+$"
+        },
+        "description": {
+          "description": "A concise, human-readable explanation of what this prompt does — its purpose, the task it solves, and the kind of input/output it expects. Used in the playground UI and for documentation.",
+          "type": "string",
+          "minLength": 1
+        },
+        "playground_prompt_id": {
+          "description": "The opaque prompt ID assigned by the OpenAI platform when the prompt is saved there (e.g. 'pmpt_691ec62b...'). Used to link back to the hosted version of the prompt.",
+          "type": "string"
+        },
+        "playground_testing_url": {
+          "description": "Full URL to the prompt's testing page in the OpenAI playground. Allows engineers to open the prompt directly in the provider's UI for manual testing.",
+          "type": "string",
+          "format": "uri"
+        },
+        "engineering_method": {
+          "description": "Documentation of the prompt engineering approach: the intermediary reasoning steps used, the few-shot examples included, the expected outputs produced, and any additional design notes.",
+          "type": "object",
+          "required": ["intermediary_steps", "examples_provided", "expected_outputs"],
+          "properties": {
+            "intermediary_steps": {
+              "description": "List of intermediate outputs the model is instructed to produce before its final answer (chain-of-thought steps). An empty array indicates no intermediary steps are used.",
+              "type": "array",
+              "items": {
+                "description": "A single intermediary reasoning step requested of the model.",
+                "type": "object",
+                "required": ["step", "purpose", "token_cost"],
+                "properties": {
+                  "step": {
+                    "description": "Short identifier for this intermediary step, matching the key name used in the prompt output (e.g. 'decision', 'old_content').",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "purpose": {
+                    "description": "Explanation of why this step is included and what effect removing it would have on model behaviour.",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "token_cost": {
+                    "description": "Approximate relative token cost of this step compared to the primary output (e.g. 1.0 = same size as output, 0.1 = 10% of output size). Used for token budget planning.",
+                    "type": "number",
+                    "minimum": 0
+                  }
+                }
+              }
+            },
+            "examples_provided": {
+              "description": "Summary of the few-shot examples embedded in the prompt messages.",
+              "type": "object",
+              "required": ["count", "behaviors_shown"],
+              "properties": {
+                "count": {
+                  "description": "Number of few-shot input/output examples included in the prompt.",
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "behaviors_shown": {
+                  "description": "List of distinct model behaviours demonstrated by the examples (e.g. 'Merging 2+ sentences empties the next one', 'Examples in 2 languages'). Helps future engineers understand what each example teaches.",
+                  "type": "array",
+                  "items": {
+                    "description": "A single behaviour or capability illustrated by at least one of the few-shot examples.",
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            "expected_outputs": {
+              "description": "List of output fields the model is expected to produce in its final response. Must contain at least one entry (the primary/conclusion output).",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "description": "A single output field in the model's final response.",
+                "type": "object",
+                "required": ["output", "purpose", "token_cost"],
+                "properties": {
+                  "output": {
+                    "description": "Name of the output field as it appears in the model's response (e.g. 'content', 'summary').",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "purpose": {
+                    "description": "Description of what this output field contains and how it will be consumed by the application.",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "token_cost": {
+                    "description": "Approximate relative token cost of this output field (e.g. 1.0 = the primary output, 0.5 = half the size of the primary output). Used for token budget planning.",
+                    "type": "number",
+                    "minimum": 0
+                  }
+                }
+              }
+            },
+            "other_comments": {
+              "description": "Free-text field for any additional notes about the engineering approach that do not fit elsewhere — trade-offs made, known limitations, ideas for future improvement, etc.",
+              "type": "string"
+            }
+          }
+        },
+        "performance_tests": {
+          "description": "Array of test cases used to validate that the prompt produces the expected output for known inputs. An empty array is valid when no tests have been defined yet.",
+          "type": "array",
+          "items": {
+            "description": "A single performance test case: a concrete input and the corresponding expected LLM output.",
+            "type": "object",
+            "required": ["input", "expected_output"],
+            "properties": {
+              "input": {
+                "description": "Key/value map of variable values to inject into the prompt for this test case. Keys must correspond to the names defined in `input_variables[*].keys`.",
+                "type": "object"
+              },
+              "expected_output": {
+                "description": "The exact (or representative) LLM response expected when the prompt is run with the given input. Used as the gold standard for regression testing.",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "token_expansion_ratio": {
+          "description": "Observed ratio of total output tokens (including all intermediary steps) to the primary input content tokens. Used to estimate API costs before running the prompt at scale. A value of 3.1 means the model produces ~3.1× as many tokens as the input.",
+          "type": "number",
+          "minimum": 0
+        },
+        "input_delimiters": {
+          "description": "A two-element array containing the opening and closing delimiters used to mark variable placeholders in prompt message content (e.g. ['<%', '%>'] means variables are written as '<%VARIABLE_NAME%>'). Must contain exactly two non-empty strings.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "description": "A delimiter string (either the opening or closing marker for variable placeholders).",
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "input_variables": {
+          "description": "Defines all variables that can be injected into the prompt messages. Each object in this array groups a set of typed variable keys. The top-level `name` and `type` fields on each object are vestigial and not used by the runtime — only `keys` is consumed.",
+          "type": "array",
+          "items": {
+            "description": "A grouping of input variable key definitions. Only `keys` is meaningful; `name` and `type` at this level are vestigial.",
+            "type": "object",
+            "required": ["keys"],
+            "properties": {
+              "name": {
+                "description": "Vestigial field — not used by the runtime. Kept for backwards compatibility with earlier versions of the format.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Vestigial field — not used by the runtime. Kept for backwards compatibility with earlier versions of the format.",
+                "type": "string"
+              },
+              "keys": {
+                "description": "The actual list of named, typed variables that will be substituted into the prompt messages at runtime.",
+                "type": "array",
+                "items": {
+                  "description": "A single input variable definition.",
+                  "type": "object",
+                  "required": ["name", "type"],
+                  "properties": {
+                    "name": {
+                      "description": "Variable name exactly as it appears between the input delimiters in the prompt messages (e.g. 'VIDEO_TRANSCRIPTION_LANGUAGE'). Case-sensitive.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "type": {
+                      "description": "JSON data type of the variable's value. 'string' is the most common; use 'array' or 'object' when the variable contains structured data that will be serialized to JSON before injection.",
+                      "type": "string",
+                      "enum": ["string", "number", "boolean", "array", "object"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "risk_profile": {
+          "description": "Security and data-handling risk assessment for this prompt. Documents the confidentiality level of data flowing in and out, the data's origin, and the security capabilities (attack surfaces or output sinks) that engineers must be aware of.",
+          "type": "object",
+          "required": ["input", "output"],
+          "properties": {
+            "input": {
+              "description": "Risk profile for the data that is passed into the prompt as user-supplied or external content.",
+              "type": "object",
+              "required": ["type", "data_confidentiality", "data_origin", "capabilities"],
+              "properties": {
+                "type": {
+                  "description": "Format or encoding of the input data (e.g. 'rawtext', 'json', 'html'). Informs sanitisation requirements.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "data_confidentiality": {
+                  "description": "Confidentiality classification of the input data (e.g. 'public', 'internal', 'confidential', 'restricted'). Determines which environments and logging policies are acceptable.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "data_origin": {
+                  "description": "Where the input data originates from (e.g. 'user', 'system', 'external'). Indicates how much the data can be trusted and what validation is required.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "capabilities": {
+                  "description": "List of security capabilities or attack surfaces present in the input. Known values include 'promptinjection' (input may contain adversarial instructions), 'pii' (input may contain personally identifiable information), 'sensitive' (input contains sensitive business data).",
+                  "type": "array",
+                  "items": {
+                    "description": "A single security capability or risk tag associated with the input.",
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            "output": {
+              "description": "Risk profile for the data produced by the LLM in response to this prompt.",
+              "type": "object",
+              "required": ["type", "data_confidentiality", "capabilities"],
+              "properties": {
+                "type": {
+                  "description": "Format or encoding of the output data (e.g. 'rawtext', 'json', 'html'). Informs how the output should be handled before use.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "data_confidentiality": {
+                  "description": "Confidentiality classification of the output data (e.g. 'public', 'internal', 'confidential', 'restricted'). Determines storage and transmission policies.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "capabilities": {
+                  "description": "List of capabilities or sinks associated with the output. Known values include 'display' (output will be rendered to end users), 'html' (output may contain HTML that could cause XSS if unescaped), 'execute' (output may be executed as code), 'store' (output will be persisted), 'transmit' (output will be sent to external services).",
+                  "type": "array",
+                  "items": {
+                    "description": "A single capability or output sink tag.",
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "llm_parameters": {
+      "description": "Configuration for the LLM API call: provider, model, sampling parameters, and the full message history (system prompt, few-shot examples, and the live user message).",
+      "type": "object",
+      "required": [
+        "provider",
+        "model",
+        "temperature",
+        "max_tokens",
+        "top_p",
+        "frequency_penalty",
+        "presence_penalty",
+        "messages"
+      ],
+      "properties": {
+        "provider": {
+          "description": "Identifier of the LLM provider. Known values include 'openAi', 'anthropic', 'gemini', 'mistral'. The playground uses this to select the correct API client.",
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "description": "Model identifier as expected by the provider's API (e.g. 'gpt-4o-mini', 'claude-sonnet-4-6', 'gemini-2.0-flash'). Must match the provider's current model catalogue.",
+          "type": "string",
+          "minLength": 1
+        },
+        "temperature": {
+          "description": "Sampling temperature controlling output randomness. 0 = deterministic/greedy, higher values produce more varied output. Typical range 0–2 for OpenAI-compatible APIs.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "max_tokens": {
+          "description": "Maximum number of tokens the model may generate in its response. Set this to accommodate the largest realistic output, including any intermediary steps.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "top_p": {
+          "description": "Nucleus sampling parameter. Only the smallest set of tokens whose cumulative probability exceeds top_p are considered at each step. 1.0 = no filtering. Typically left at 1 when temperature is already tuned.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "frequency_penalty": {
+          "description": "Penalises tokens proportionally to how often they have already appeared in the output. Positive values reduce repetition. Range: -2.0 to 2.0.",
+          "type": "number",
+          "minimum": -2,
+          "maximum": 2
+        },
+        "presence_penalty": {
+          "description": "Penalises tokens that have appeared at least once in the output, encouraging the model to introduce new topics. Range: -2.0 to 2.0.",
+          "type": "number",
+          "minimum": -2,
+          "maximum": 2
+        },
+        "messages": {
+          "description": "Ordered list of conversation messages forming the complete prompt. Typically includes a 'system' message, zero or more alternating 'user'/'assistant' few-shot example pairs, and a final 'user' message containing variable placeholders.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "description": "A single message in the conversation history.",
+            "type": "object",
+            "required": ["role", "content"],
+            "properties": {
+              "role": {
+                "description": "The author role of this message. 'system' sets the model's behaviour and persona. 'user' represents input from the caller. 'assistant' represents a model response (used in few-shot examples).",
+                "type": "string",
+                "enum": ["system", "user", "assistant"]
+              },
+              "content": {
+                "description": "The text content of the message. May contain variable placeholders using the delimiters defined in `template_info.input_delimiters` (e.g. '<%VARIABLE_NAME%>'). Placeholders are substituted at runtime before the API call is made.",
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "response_format": {
+      "description": "Specifies the format the LLM must use for its response. When set to 'json_schema', the model is constrained to produce output that strictly conforms to the provided JSON Schema definition.",
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "description": "The response format type. Known values: 'text' (free-form text), 'json_object' (any valid JSON object), 'json_schema' (JSON object conforming to the schema defined in the `json_schema` property).",
+          "type": "string",
+          "minLength": 1
+        },
+        "json_schema": {
+          "description": "JSON Schema definition used to constrain the model's response. Required when `type` is 'json_schema'. The model's output will be validated against `schema` before being returned.",
+          "type": "object",
+          "required": ["name", "strict", "schema"],
+          "properties": {
+            "name": {
+              "description": "A short snake_case identifier for this schema (e.g. 'fix_grammar'). Used by the provider's API to label the structured output type.",
+              "type": "string",
+              "minLength": 1
+            },
+            "strict": {
+              "description": "When true, the provider enforces that the model's output exactly matches the schema (no additional properties, no missing required fields). When false, the schema is used as a hint only.",
+              "type": "boolean"
+            },
+            "schema": {
+              "description": "A valid JSON Schema object that the model's response must conform to. This is a nested schema definition — it describes the shape of the LLM's output, not the prompt file itself.",
+              "type": "object"
+            }
+          }
+        }
+      }
+    }
+  }
+}
