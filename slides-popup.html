@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Open Slides</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background: #f0f0f0;
+      font-family: sans-serif;
+    }
+    button {
+      padding: 14px 28px;
+      font-size: 16px;
+      cursor: pointer;
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 6px;
+    }
+    button:hover {
+      background: #1557b0;
+    }
+  </style>
+</head>
+<body>
+  <button onclick="openSlides()">Open Presentation</button>
+  <script>
+    function openSlides() {
+      const url = 'https://docs.google.com/presentation/d/1liqg7kygLCDglJVxXjmk9VDx6q9X-zhyqZhBVvv63mk/present?token=AC4w5VgT2xJsSeOnp40ZwKHdBdNHFa8L3w%3A1774608635764&includes_info_params=1&cros_files=false&nded=false&eisi=CMzW5ar0v5MDFaSdqwcdsRcKVA#slide=id.g2c96d833f6f_0_47';
+      window.open(url, 'slidesPopup', 'width=1024,height=768,resizable=yes,toolbar=no,menubar=no,location=no,status=no,scrollbars=yes');
+    }
+  </script>
+</body>
+</html>
