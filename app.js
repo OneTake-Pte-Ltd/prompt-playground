@@ -1,5 +1,4 @@
-import { createRoot } from 'react-dom/client';
-import { html, useState, useRef, useEffect } from './lib.js';
+import { html, render, useState, useRef, useEffect } from './lib.js';
 import { useLocalStorage } from './utils/storage.js';
 import { normalizeMessages } from './utils/messages.js';
 import { applyVariablesToMessages } from './utils/variables.js';
@@ -423,4 +422,4 @@ function App() {
 }
 
 // ─── Entry Point ──────────────────────────────────────────────────────────────
-createRoot(document.getElementById('root')).render(html`<${App} />`);
+render(html`<${App} />`, document.getElementById('root'));
