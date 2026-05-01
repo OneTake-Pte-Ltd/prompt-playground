@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "$id": "prompt-template.schema.json",
   "title": "LLM Prompt Template",
+  "prompt_schema_version": "1.0",
   "description": "Schema for LLM prompt template files used in the prompt-playground. Each file fully describes a prompt: its metadata, engineering rationale, LLM parameters, and expected response format.",
   "definitions": {
     "contentBlock": {
@@ -140,7 +141,7 @@
       "required": [
         "id",
         "name",
-        "PromptStandard_version",
+        "prompt_schema_version",
         "description",
         "playground_prompt_id",
         "playground_testing_url",
@@ -162,8 +163,8 @@
           "type": "string",
           "minLength": 1
         },
-        "PromptStandard_version": {
-          "description": "Version of the PromptStandard format specification this file conforms to, in MAJOR.MINOR notation (e.g. '1.0'). Increment MINOR for backwards-compatible additions, MAJOR for breaking changes.",
+        "prompt_schema_version": {
+          "description": "Version of the prompt schema specification this file conforms to, in MAJOR.MINOR notation (e.g. '1.0'). Increment MINOR for backwards-compatible additions, MAJOR for breaking changes.",
           "type": "string",
           "pattern": "^\\d+\\.\\d+$"
         },
@@ -187,7 +188,7 @@
           "required": ["intermediary_steps", "examples_provided", "expected_outputs"],
           "properties": {
             "intermediary_steps": {
-              "description": "List of intermediate outputs the model is instructed to produce before its final answer (chain-of-thought steps). An empty array indicates no intermediary steps are used.",
+              "description": "List of intermediate outputs the model is instructed to produce before its final answer (chain-of-thought steps). An empty array indicates no intermediary steps are used. IMPORTANT ordering rule: reasoning must always precede its conclusion. Never design a prompt that outputs a decision first and an explanation after — instead, structure outputs so that a 'debate' or 'thinking' step appears before any 'decision' or 'grade' output (e.g. assessment → grade, thinking → decision).",
               "type": "array",
               "items": {
                 "description": "A single intermediary reasoning step requested of the model.",
@@ -302,7 +303,7 @@
           }
         },
         "input_variables": {
-          "description": "Defines all variables that can be injected into the prompt messages. Each object in this array groups a set of typed variable keys. The top-level `name` and `type` fields on each object are vestigial and not used by the runtime — only `keys` is consumed.",
+          "description": "Defines all variables that can be injected into the prompt messages. Each object in this array groups a set of typed variable keys. The top-level `name` and `type` fields on each object are vestigial and not used by the runtime — only `keys` is consumed. Standard variables to include in almost every prompt: `CUSTOM_INSTRUCTIONS` (string) — caller-supplied instructions that override or extend default behaviour; `CUSTOM_VOCABULARY` (string) — caller-supplied terminology or brand glossary. Additionally, include `USER_LANGUAGE` (string) whenever any output field will be displayed to the end user. For each of these standard variables: provide realistic example values in the few-shot examples in `llm_parameters.messages`, and inject them in the final user message.",
           "type": "array",
           "items": {
             "description": "A grouping of input variable key definitions. Only `keys` is meaningful; `name` and `type` at this level are vestigial.",
@@ -326,7 +327,7 @@
                   "required": ["name", "type"],
                   "properties": {
                     "name": {
-                      "description": "Variable name exactly as it appears between the input delimiters in the prompt messages (e.g. 'VIDEO_TRANSCRIPTION_LANGUAGE'). Case-sensitive.",
+                      "description": "Variable name exactly as it appears between the input delimiters in the prompt messages. Use snake_case (e.g. 'USER_LANGUAGE', 'CUSTOM_INSTRUCTIONS'). Case-sensitive.",
                       "type": "string",
                       "minLength": 1
                     },
