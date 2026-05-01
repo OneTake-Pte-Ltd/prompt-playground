@@ -268,10 +268,10 @@
           }
         },
         "performance_tests": {
-          "description": "Array of test cases used to validate that the prompt produces the expected output for known inputs. An empty array is valid when no tests have been defined yet.",
+          "description": "Array of test cases used to validate that the prompt produces correct output for known inputs. Each test case pairs a concrete input with an `expected_output` object containing assertion checks. Only the output fields you want to test need to be present — omitted fields are not checked. The shape of `expected_output` mirrors the response schema (for JSON responses) or uses the reserved key `_raw` (for plain-text responses). At every leaf, the value is an array of assertion objects that must ALL pass for the test to succeed.",
           "type": "array",
           "items": {
-            "description": "A single performance test case: a concrete input and the corresponding expected LLM output.",
+            "description": "A single performance test case.",
             "type": "object",
             "required": ["input", "expected_output"],
             "properties": {
@@ -280,10 +280,64 @@
                 "type": "object"
               },
               "expected_output": {
-                "description": "The exact (or representative) LLM response expected when the prompt is run with the given input. Used as the gold standard for regression testing.",
-                "type": "string"
+                "description": "A sparse mirror of the response structure containing only the fields to be tested. Each leaf value is an array of assertion objects (see `assertion` definition). For JSON-schema responses, the object shape follows the response schema — navigate into nested objects by using the same property names, and place assertion arrays at the leaves you want to check. For plain-text responses (`response_format.type` = 'text'), use a single reserved key `_raw` whose value is an array of assertions applied to the full response string. Intermediate output fields (those listed in `engineering_method.intermediary_steps`) should typically NOT be tested here — focus assertions on the fields in `engineering_method.expected_outputs`.",
+                "type": "object"
               }
             }
+          }
+        },
+        "assertion_types_reference": {
+          "description": "Reference documentation for the assertion types used inside `expected_output` leaf arrays. This field is not consumed at runtime — it exists purely as in-schema documentation for engineers and tooling authors. Each assertion object must have a `type` field and the corresponding parameters for that type. All assertions on a given leaf must pass (logical AND) for the test to succeed.",
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "description": "Exact equality check. Passes when the actual value strictly equals `value`. Works on strings, numbers, and booleans.",
+                "type": "object",
+                "required": ["type", "value"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["exact"] },
+                  "value": { "description": "The expected exact value." }
+                }
+              },
+              {
+                "description": "Numeric range check. Passes when `min <= actual <= max` (inclusive). At least one of `min` or `max` must be provided. Omit `min` for an upper-bound-only check, omit `max` for a lower-bound-only check.",
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["range"] },
+                  "min": { "type": "number", "description": "Inclusive lower bound." },
+                  "max": { "type": "number", "description": "Inclusive upper bound." }
+                }
+              },
+              {
+                "description": "Keyword presence check. Passes when the actual string value contains at least one of the provided keywords (case-insensitive substring match).",
+                "type": "object",
+                "required": ["type", "values"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["contains_any","contains_all"] },
+                  "values": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1,
+                    "description": "List of keywords or phrases. The check passes if any one of them (contains_any) or all of them (contains_all) appear in the actual value.."
+                  }
+                }
+              },
+              {
+                "description": "Fuzzy / semantic check evaluated by an LLM judge. The actual value (stringified if not already a string) is sent to a judge LLM along with the `criterion` instruction. The judge returns pass/fail. Use this for subjective or semantic conditions that cannot be checked deterministically.",
+                "type": "object",
+                "required": ["type", "criterion"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["fuzzy"] },
+                  "criterion": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "A plain-language instruction describing what the judge LLM should verify. Write it as a requirement, e.g. 'Must recommend a stronger conclusion or call to action'."
+                  }
+                }
+              }
+            ]
           }
         },
         "token_expansion_ratio": {
@@ -303,13 +357,21 @@
           }
         },
         "input_variables": {
-          "description": "Defines all variables that can be injected into the prompt messages. Each object in this array groups a set of typed variable keys. Standard variables to include in almost every prompt: `CUSTOM_INSTRUCTIONS` (string) — caller-supplied instructions that override or extend default behaviour; `CUSTOM_VOCABULARY` (string) — caller-supplied terminology or brand glossary. Additionally, include `USER_LANGUAGE` (string) whenever any output field will be displayed to the end user. For each of these standard variables: provide realistic example values in the few-shot examples in `llm_parameters.messages`, and inject them in the final user message.\n\nIMPORTANT — prompt caching: variable placeholders should appear only in the final user message. Avoid placing them in the system prompt or in few-shot example (user/assistant) messages. Prompt caching (which eliminates redundant compute cost on repeated calls) only activates when the leading prefix of the conversation — system prompt plus all messages except the last — is byte-for-byte identical across calls. Any variable substitution in that prefix produces a different byte sequence each call, defeating the cache entirely.",
+          "description": "Defines all variables that can be injected into the prompt messages. Each object in this array groups a set of typed variable keys. The top-level `name` and `type` fields on each object are vestigial and not used by the runtime — only `keys` is consumed. Standard variables to include in almost every prompt: `CUSTOM_INSTRUCTIONS` (string) — caller-supplied instructions that override or extend default behaviour; `CUSTOM_VOCABULARY` (string) — caller-supplied terminology or brand glossary. Additionally, include `USER_LANGUAGE` (string) whenever any output field will be displayed to the end user. For each of these standard variables: provide realistic example values in the few-shot examples in `llm_parameters.messages`, and inject them in the final user message.",
           "type": "array",
           "items": {
-            "description": "A grouping of input variable key definitions.",
+            "description": "A grouping of input variable key definitions. Only `keys` is meaningful; `name` and `type` at this level are vestigial.",
             "type": "object",
             "required": ["keys"],
             "properties": {
+              "name": {
+                "description": "Vestigial field — not used by the runtime. Kept for backwards compatibility with earlier versions of the format.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Vestigial field — not used by the runtime. Kept for backwards compatibility with earlier versions of the format.",
+                "type": "string"
+              },
               "keys": {
                 "description": "The actual list of named, typed variables that will be substituted into the prompt messages at runtime.",
                 "type": "array",
