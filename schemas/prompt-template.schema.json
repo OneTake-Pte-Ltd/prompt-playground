@@ -3,6 +3,134 @@
   "$id": "prompt-template.schema.json",
   "title": "LLM Prompt Template",
   "description": "Schema for LLM prompt template files used in the prompt-playground. Each file fully describes a prompt: its metadata, engineering rationale, LLM parameters, and expected response format.",
+  "definitions": {
+    "contentBlock": {
+      "oneOf": [
+        {
+          "description": "A plain text content block (OpenAI and Anthropic).",
+          "type": "object",
+          "required": ["type", "text"],
+          "properties": {
+            "type": { "type": "string", "enum": ["text"] },
+            "text": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "An OpenAI image URL content block.",
+          "type": "object",
+          "required": ["type", "image_url"],
+          "properties": {
+            "type": { "type": "string", "enum": ["image_url"] },
+            "image_url": {
+              "type": "object",
+              "required": ["url"],
+              "properties": {
+                "url": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "An Anthropic image content block.",
+          "type": "object",
+          "required": ["type", "source"],
+          "properties": {
+            "type": { "type": "string", "enum": ["image"] },
+            "source": {
+              "type": "object",
+              "required": ["type", "media_type", "data"],
+              "properties": {
+                "type": { "type": "string", "enum": ["base64"] },
+                "media_type": { "type": "string" },
+                "data": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "llmParameterShape": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "description": "Identifier of the LLM provider. Known values include 'openAi', 'anthropic', 'gemini', 'mistral'. The playground uses this to select the correct API client.",
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "description": "Model identifier as expected by the provider's API (e.g. 'gpt-4o-mini', 'claude-sonnet-4-6', 'gemini-2.0-flash'). Must match the provider's current model catalogue.",
+          "type": "string",
+          "minLength": 1
+        },
+        "temperature": {
+          "description": "Sampling temperature controlling output randomness. 0 = deterministic/greedy, higher values produce more varied output. Typical range 0–2 for OpenAI-compatible APIs. Omit for models that do not support this parameter (e.g. o-series reasoning models).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "max_tokens": {
+          "description": "Maximum number of tokens the model may generate in its response. Set this to accommodate the largest realistic output, including any intermediary steps. Omit to use the provider's default.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "top_p": {
+          "description": "Nucleus sampling parameter. Only the smallest set of tokens whose cumulative probability exceeds top_p are considered at each step. 1.0 = no filtering. Typically left at 1 when temperature is already tuned. Omit for models that do not support this parameter.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "frequency_penalty": {
+          "description": "Penalises tokens proportionally to how often they have already appeared in the output. Positive values reduce repetition. Range: -2.0 to 2.0. Omit for models that do not support this parameter.",
+          "type": "number",
+          "minimum": -2,
+          "maximum": 2
+        },
+        "presence_penalty": {
+          "description": "Penalises tokens that have appeared at least once in the output, encouraging the model to introduce new topics. Range: -2.0 to 2.0. Omit for models that do not support this parameter.",
+          "type": "number",
+          "minimum": -2,
+          "maximum": 2
+        },
+        "model_parameters": {
+          "description": "Model-specific parameters that are not part of the standard sampling parameter set. Use this for provider- or model-specific options (e.g. `{ \"reasoning\": { \"effort\": \"low\" } }` for OpenAI o-series models). Keys and value shapes are model-dependent and not validated by this schema.",
+          "type": "object"
+        },
+        "messages": {
+          "description": "Ordered list of conversation messages forming the complete prompt. Typically includes a 'system' message, zero or more alternating 'user'/'assistant' few-shot example pairs, and a final 'user' message containing variable placeholders.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "description": "A single message in the conversation history.",
+            "type": "object",
+            "required": ["role", "content"],
+            "properties": {
+              "role": {
+                "description": "The author role of this message. 'system' sets the model's behaviour and persona. 'user' represents input from the caller. 'assistant' represents a model response (used in few-shot examples).",
+                "type": "string",
+                "enum": ["system", "user", "assistant"]
+              },
+              "content": {
+                "description": "The content of the message. Either a plain string (for text-only messages) or an array of content blocks (for multi-modal messages). May contain variable placeholders using the delimiters defined in `template_info.input_delimiters` (e.g. '<%VARIABLE_NAME%>'). Placeholders are substituted at runtime before the API call is made.",
+                "oneOf": [
+                  { "type": "string" },
+                  {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "$ref": "#/definitions/contentBlock" }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
   "type": "object",
   "required": ["template_info", "llm_parameters", "response_format"],
   "properties": {
@@ -281,144 +409,16 @@
     },
     "llm_parameters": {
       "description": "Primary configuration for the LLM API call: provider, model, optional sampling parameters, optional model-specific parameters, and the full message history. Only `provider`, `model`, and `messages` are required — sampling parameters are model-dependent and should be omitted when not applicable.",
-      "type": "object",
-      "required": ["provider", "model", "messages"],
-      "properties": {
-        "provider": {
-          "description": "Identifier of the LLM provider. Known values include 'openAi', 'anthropic', 'gemini', 'mistral'. The playground uses this to select the correct API client.",
-          "type": "string",
-          "minLength": 1
-        },
-        "model": {
-          "description": "Model identifier as expected by the provider's API (e.g. 'gpt-4o-mini', 'claude-sonnet-4-6', 'gemini-2.0-flash'). Must match the provider's current model catalogue.",
-          "type": "string",
-          "minLength": 1
-        },
-        "temperature": {
-          "description": "Sampling temperature controlling output randomness. 0 = deterministic/greedy, higher values produce more varied output. Typical range 0–2 for OpenAI-compatible APIs. Omit for models that do not support this parameter (e.g. o-series reasoning models).",
-          "type": "number",
-          "minimum": 0,
-          "maximum": 2
-        },
-        "max_tokens": {
-          "description": "Maximum number of tokens the model may generate in its response. Set this to accommodate the largest realistic output, including any intermediary steps. Omit to use the provider's default.",
-          "type": "integer",
-          "minimum": 1
-        },
-        "top_p": {
-          "description": "Nucleus sampling parameter. Only the smallest set of tokens whose cumulative probability exceeds top_p are considered at each step. 1.0 = no filtering. Typically left at 1 when temperature is already tuned. Omit for models that do not support this parameter.",
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "frequency_penalty": {
-          "description": "Penalises tokens proportionally to how often they have already appeared in the output. Positive values reduce repetition. Range: -2.0 to 2.0. Omit for models that do not support this parameter.",
-          "type": "number",
-          "minimum": -2,
-          "maximum": 2
-        },
-        "presence_penalty": {
-          "description": "Penalises tokens that have appeared at least once in the output, encouraging the model to introduce new topics. Range: -2.0 to 2.0. Omit for models that do not support this parameter.",
-          "type": "number",
-          "minimum": -2,
-          "maximum": 2
-        },
-        "model_parameters": {
-          "description": "Model-specific parameters that are not part of the standard sampling parameter set. Use this for provider- or model-specific options (e.g. `{ \"reasoning\": { \"effort\": \"low\" } }` for OpenAI o-series models). Keys and value shapes are model-dependent and not validated by this schema.",
-          "type": "object"
-        },
-        "messages": {
-          "description": "Ordered list of conversation messages forming the complete prompt. Typically includes a 'system' message, zero or more alternating 'user'/'assistant' few-shot example pairs, and a final 'user' message containing variable placeholders.",
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "description": "A single message in the conversation history.",
-            "type": "object",
-            "required": ["role", "content"],
-            "properties": {
-              "role": {
-                "description": "The author role of this message. 'system' sets the model's behaviour and persona. 'user' represents input from the caller. 'assistant' represents a model response (used in few-shot examples).",
-                "type": "string",
-                "enum": ["system", "user", "assistant"]
-              },
-              "content": {
-                "description": "The text content of the message. May contain variable placeholders using the delimiters defined in `template_info.input_delimiters` (e.g. '<%VARIABLE_NAME%>'). Placeholders are substituted at runtime before the API call is made.",
-                "type": "string"
-              }
-            }
-          }
-        }
-      }
+      "allOf": [
+        { "$ref": "#/definitions/llmParameterShape" },
+        { "required": ["provider", "model", "messages"] }
+      ]
     },
     "fallback_parameters": {
       "description": "Partial override of `llm_parameters` for the fallback model call. Only specify the fields that differ from the primary configuration — unspecified fields inherit their values from `llm_parameters`. The runtime merges this object with `llm_parameters` at call time, with `fallback_parameters` values taking precedence. Omit this field entirely if no fallback is needed.",
-      "type": "object",
-      "properties": {
-        "provider": {
-          "description": "Fallback LLM provider. Overrides `llm_parameters.provider` when specified. Known values include 'openAi', 'anthropic', 'gemini', 'mistral'.",
-          "type": "string",
-          "minLength": 1
-        },
-        "model": {
-          "description": "Fallback model identifier as expected by the provider's API. Overrides `llm_parameters.model` when specified.",
-          "type": "string",
-          "minLength": 1
-        },
-        "temperature": {
-          "description": "Fallback sampling temperature. Overrides `llm_parameters.temperature` when specified. Range: 0–2.",
-          "type": "number",
-          "minimum": 0,
-          "maximum": 2
-        },
-        "max_tokens": {
-          "description": "Fallback maximum token limit. Overrides `llm_parameters.max_tokens` when specified. Must be ≥ 1.",
-          "type": "integer",
-          "minimum": 1
-        },
-        "top_p": {
-          "description": "Fallback nucleus sampling parameter. Overrides `llm_parameters.top_p` when specified. Range: 0–1.",
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "frequency_penalty": {
-          "description": "Fallback frequency penalty. Overrides `llm_parameters.frequency_penalty` when specified. Range: -2.0 to 2.0.",
-          "type": "number",
-          "minimum": -2,
-          "maximum": 2
-        },
-        "presence_penalty": {
-          "description": "Fallback presence penalty. Overrides `llm_parameters.presence_penalty` when specified. Range: -2.0 to 2.0.",
-          "type": "number",
-          "minimum": -2,
-          "maximum": 2
-        },
-        "model_parameters": {
-          "description": "Fallback model-specific parameters. Overrides `llm_parameters.model_parameters` when specified. Keys and value shapes are model-dependent and not validated by this schema.",
-          "type": "object"
-        },
-        "messages": {
-          "description": "Fallback message array. Overrides `llm_parameters.messages` when specified. Use only when the fallback model or provider requires a differently structured conversation (e.g. different system prompt wording).",
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "description": "A single message in the fallback conversation history.",
-            "type": "object",
-            "required": ["role", "content"],
-            "properties": {
-              "role": {
-                "description": "The author role of this message. 'system' sets the model's behaviour and persona. 'user' represents input from the caller. 'assistant' represents a model response (used in few-shot examples).",
-                "type": "string",
-                "enum": ["system", "user", "assistant"]
-              },
-              "content": {
-                "description": "The text content of the message. May contain variable placeholders using the delimiters defined in `template_info.input_delimiters`.",
-                "type": "string"
-              }
-            }
-          }
-        }
-      }
+      "allOf": [
+        { "$ref": "#/definitions/llmParameterShape" }
+      ]
     },
     "response_format": {
       "description": "Specifies the format the LLM must use for its response. When set to 'json_schema', the model is constrained to produce output that strictly conforms to the provided JSON Schema definition.",
