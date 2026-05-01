@@ -10,6 +10,8 @@ import { MessageEditor } from './components/MessageEditor.js';
 import { VariablePanel } from './components/VariablePanel.js';
 import { ResponseDisplay } from './components/ResponseDisplay.js';
 import { DiffViewer } from './components/DiffViewer.js';
+import { SaveModal } from './components/SaveModal.js';
+import { TestRunner } from './components/TestRunner.js';
 
 // ─── Service Worker ───────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
@@ -18,7 +20,6 @@ if ('serviceWorker' in navigator) {
 
 // ─── Default State ────────────────────────────────────────────────────────────
 function defaultParams() {
-  // Only required fields — all sampling params start as undefined (not sent to API)
   return {
     provider: 'openAi',
     model: 'gpt-4o',
@@ -38,16 +39,21 @@ function defaultSession(params, messages) {
 }
 
 // ─── Pane (Split Mode) ────────────────────────────────────────────────────────
-function Pane({ session, sessionIdx, label, paramKey, onUpdateSession, onRun, responseFormat }) {
+function Pane({ session, sessionIdx, label, paramKey, onUpdateSession, onRun, onSave, responseFormat }) {
   const [paramsOpen, setParamsOpen] = useState(false);
 
   return html`
     <div class="pane">
       <div class="pane-header">
         <span class="pane-label">Variant ${label}</span>
-        <button class="btn btn-primary btn-sm" onClick=${onRun} disabled=${session.loading}>
-          ${session.loading ? html`<span class="spinner"></span>` : '▶'} Run
-        </button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn btn-sm" onClick=${onSave} title="Save this variant as JSON">
+            ↓ Save
+          </button>
+          <button class="btn btn-primary btn-sm" onClick=${onRun} disabled=${session.loading}>
+            ${session.loading ? html`<span class="spinner"></span>` : '▶'} Run
+          </button>
+        </div>
       </div>
 
       <div class="pane-accordion">
@@ -102,6 +108,9 @@ function App() {
   const [rawFileData, setRawFileData] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showDiff, setShowDiff] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveModalSessionIdx, setSaveModalSessionIdx] = useState(0);
+  const [showTests, setShowTests] = useState(false);
 
   // Always-current snapshot for async callbacks
   const stateRef = useRef({});
@@ -119,13 +128,11 @@ function App() {
       'frequency_penalty', 'presence_penalty', 'messages', 'model_parameters',
     ]);
 
-    // Hoist any non-standard top-level llm_parameters keys into model_parameters
     const modelParams = { ...(lp.model_parameters || {}) };
     for (const [k, v] of Object.entries(lp)) {
       if (!STANDARD.has(k)) modelParams[k] = v;
     }
 
-    // Only include sampling params that are explicitly present in the JSON
     const params = {
       provider: lp.provider || 'openAi',
       model: lp.model || 'gpt-4o',
@@ -163,51 +170,10 @@ function App() {
     ]);
   }
 
-  // ── Download JSON ───────────────────────────────────────────────────────────
-  function downloadJson() {
-    const s = sessions[0];
-
-    // Build on top of the original file data so all metadata is preserved
-    const base = rawFileData
-      ? JSON.parse(JSON.stringify(rawFileData))
-      : { template_info: { name: templateName || 'untitled' }, response_format: { type: 'text' } };
-
-    // Reconstruct llm_parameters from current state
-    const lp = { provider: s.params.provider, model: s.params.model };
-    if (s.params.temperature !== undefined)       lp.temperature = s.params.temperature;
-    if (s.params.max_tokens !== undefined)        lp.max_tokens = s.params.max_tokens;
-    if (s.params.top_p !== undefined)             lp.top_p = s.params.top_p;
-    if (s.params.frequency_penalty !== undefined) lp.frequency_penalty = s.params.frequency_penalty;
-    if (s.params.presence_penalty !== undefined)  lp.presence_penalty = s.params.presence_penalty;
-    if (Object.keys(s.params.model_parameters || {}).length > 0) {
-      lp.model_parameters = s.params.model_parameters;
-    }
-    lp.messages = s.messages;
-
-    base.llm_parameters = lp;
-    base.response_format = responseFormat;
-
-    // Update performance_tests with current variable values
-    if (base.template_info && Object.keys(variables).length > 0) {
-      if (!base.template_info.performance_tests) base.template_info.performance_tests = [];
-      if (base.template_info.performance_tests.length > 0) {
-        base.template_info.performance_tests[0].input = { ...variables };
-      } else {
-        base.template_info.performance_tests.push({ input: { ...variables }, expected_output: '' });
-      }
-    }
-
-    const slug = (base.template_info?.name || 'prompt-template')
-      .replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
-    const blob = new Blob([JSON.stringify(base, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = slug + '.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  // ── Save Modal ──────────────────────────────────────────────────────────────
+  function openSaveModal(idx) {
+    setSaveModalSessionIdx(idx);
+    setShowSaveModal(true);
   }
 
   // ── Session Helpers ─────────────────────────────────────────────────────────
@@ -292,6 +258,7 @@ function App() {
 
   const bothHaveResponses = sessions[0].response && sessions[1].response;
   const hasContent = sessions[0].messages.length > 0 || rawFileData;
+  const performanceTests = rawFileData?.template_info?.performance_tests || [];
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return html`
@@ -301,7 +268,7 @@ function App() {
         <div class="header-left">
           <${FileLoader} onLoad=${loadFile} />
           ${hasContent && html`
-            <button class="btn btn-sm" onClick=${downloadJson} title="Download current prompt as JSON">
+            <button class="btn btn-sm" onClick=${() => openSaveModal(0)} title="Download current prompt as JSON">
               ↓ Save
             </button>
           `}
@@ -314,6 +281,11 @@ function App() {
           </div>
         </div>
         <div class="header-right">
+          ${performanceTests.length > 0 && html`
+            <button class="btn btn-sm" onClick=${() => setShowTests(true)} title="Run test cases">
+              ⚑ Tests
+            </button>
+          `}
           ${mode === 'split' && html`
             <button
               class="btn btn-primary btn-sm"
@@ -393,6 +365,7 @@ function App() {
                 paramKey=${loadKey}
                 onUpdateSession=${updateSession}
                 onRun=${() => runSession(0)}
+                onSave=${() => openSaveModal(0)}
                 responseFormat=${responseFormat}
               />
               <${Pane}
@@ -402,6 +375,7 @@ function App() {
                 paramKey=${loadKey}
                 onUpdateSession=${updateSession}
                 onRun=${() => runSession(1)}
+                onSave=${() => openSaveModal(1)}
                 responseFormat=${responseFormat}
               />
             </div>
@@ -430,6 +404,29 @@ function App() {
           labelA="A"
           labelB="B"
           onClose=${() => setShowDiff(false)}
+        />
+      `}
+
+      ${showSaveModal && html`
+        <${SaveModal}
+          rawFileData=${rawFileData}
+          sessionIdx=${saveModalSessionIdx}
+          sessionLabel=${mode === 'split' ? (saveModalSessionIdx === 0 ? 'A' : 'B') : null}
+          sessions=${sessions}
+          responseFormat=${responseFormat}
+          variables=${variables}
+          onClose=${() => setShowSaveModal(false)}
+        />
+      `}
+
+      ${showTests && html`
+        <${TestRunner}
+          tests=${performanceTests}
+          sessions=${sessions}
+          responseFormat=${responseFormat}
+          delimiters=${delimiters}
+          apiKeys=${apiKeys}
+          onClose=${() => setShowTests(false)}
         />
       `}
     </div>

@@ -7,6 +7,7 @@ import { h, render, Component, Fragment, createContext } from 'https://esm.sh/pr
 import {
   useState,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useCallback,
   useRef,
@@ -16,4 +17,4 @@ import htm from 'https://esm.sh/htm@3';
 
 export const html = htm.bind(h);
 export { render, Component, Fragment, createContext };
-export { useState, useEffect, useMemo, useCallback, useRef, useContext };
+export { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, useContext };
