@@ -18,14 +18,10 @@ if ('serviceWorker' in navigator) {
 
 // ─── Default State ────────────────────────────────────────────────────────────
 function defaultParams() {
+  // Only required fields — all sampling params start as undefined (not sent to API)
   return {
     provider: 'openAi',
     model: 'gpt-4o',
-    temperature: 1,
-    max_tokens: 2048,
-    top_p: 1,
-    frequency_penalty: 0,
-    presence_penalty: 0,
     model_parameters: {},
   };
 }
@@ -49,11 +45,7 @@ function Pane({ session, sessionIdx, label, paramKey, onUpdateSession, onRun, re
     <div class="pane">
       <div class="pane-header">
         <span class="pane-label">Variant ${label}</span>
-        <button
-          class="btn btn-primary btn-sm"
-          onClick=${onRun}
-          disabled=${session.loading}
-        >
+        <button class="btn btn-primary btn-sm" onClick=${onRun} disabled=${session.loading}>
           ${session.loading ? html`<span class="spinner"></span>` : '▶'} Run
         </button>
       </div>
@@ -107,10 +99,11 @@ function App() {
   const [variableDefs, setVariableDefs] = useState([]);
   const [sessions, setSessions] = useState([defaultSession(), defaultSession()]);
   const [loadKey, setLoadKey] = useState(0);
+  const [rawFileData, setRawFileData] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showDiff, setShowDiff] = useState(false);
 
-  // Keep a ref to always-current state for use inside async callbacks
+  // Always-current snapshot for async callbacks
   const stateRef = useRef({});
   useEffect(() => {
     stateRef.current = { sessions, apiKeys, variables, delimiters, responseFormat };
@@ -118,28 +111,31 @@ function App() {
 
   // ── File Loading ────────────────────────────────────────────────────────────
   function loadFile(data) {
+    setRawFileData(data);
+
     const lp = data.llm_parameters || {};
     const STANDARD = new Set([
       'provider', 'model', 'temperature', 'max_tokens', 'top_p',
       'frequency_penalty', 'presence_penalty', 'messages', 'model_parameters',
     ]);
 
+    // Hoist any non-standard top-level llm_parameters keys into model_parameters
     const modelParams = { ...(lp.model_parameters || {}) };
-    // Hoist non-standard llm_parameters keys into model_parameters
     for (const [k, v] of Object.entries(lp)) {
       if (!STANDARD.has(k)) modelParams[k] = v;
     }
 
+    // Only include sampling params that are explicitly present in the JSON
     const params = {
       provider: lp.provider || 'openAi',
       model: lp.model || 'gpt-4o',
-      temperature: lp.temperature ?? 1,
-      max_tokens: lp.max_tokens ?? 2048,
-      top_p: lp.top_p ?? 1,
-      frequency_penalty: lp.frequency_penalty ?? 0,
-      presence_penalty: lp.presence_penalty ?? 0,
       model_parameters: modelParams,
     };
+    if (lp.temperature != null)        params.temperature = lp.temperature;
+    if (lp.max_tokens != null)         params.max_tokens = lp.max_tokens;
+    if (lp.top_p != null)              params.top_p = lp.top_p;
+    if (lp.frequency_penalty != null)  params.frequency_penalty = lp.frequency_penalty;
+    if (lp.presence_penalty != null)   params.presence_penalty = lp.presence_penalty;
 
     const messages = normalizeMessages(lp.messages || []);
     const defs = data.template_info?.input_variables?.[0]?.keys || [];
@@ -156,7 +152,6 @@ function App() {
     setTemplateName(data.template_info?.name || '');
     setLoadKey((k) => k + 1);
 
-    // Deep-clone messages so each pane is independent
     const cloneMessages = (msgs) => msgs.map((m) => ({
       ...m,
       content: Array.isArray(m.content) ? [...m.content] : m.content,
@@ -168,6 +163,53 @@ function App() {
     ]);
   }
 
+  // ── Download JSON ───────────────────────────────────────────────────────────
+  function downloadJson() {
+    const s = sessions[0];
+
+    // Build on top of the original file data so all metadata is preserved
+    const base = rawFileData
+      ? JSON.parse(JSON.stringify(rawFileData))
+      : { template_info: { name: templateName || 'untitled' }, response_format: { type: 'text' } };
+
+    // Reconstruct llm_parameters from current state
+    const lp = { provider: s.params.provider, model: s.params.model };
+    if (s.params.temperature !== undefined)       lp.temperature = s.params.temperature;
+    if (s.params.max_tokens !== undefined)        lp.max_tokens = s.params.max_tokens;
+    if (s.params.top_p !== undefined)             lp.top_p = s.params.top_p;
+    if (s.params.frequency_penalty !== undefined) lp.frequency_penalty = s.params.frequency_penalty;
+    if (s.params.presence_penalty !== undefined)  lp.presence_penalty = s.params.presence_penalty;
+    if (Object.keys(s.params.model_parameters || {}).length > 0) {
+      lp.model_parameters = s.params.model_parameters;
+    }
+    lp.messages = s.messages;
+
+    base.llm_parameters = lp;
+    base.response_format = responseFormat;
+
+    // Update performance_tests with current variable values
+    if (base.template_info && Object.keys(variables).length > 0) {
+      if (!base.template_info.performance_tests) base.template_info.performance_tests = [];
+      if (base.template_info.performance_tests.length > 0) {
+        base.template_info.performance_tests[0].input = { ...variables };
+      } else {
+        base.template_info.performance_tests.push({ input: { ...variables }, expected_output: '' });
+      }
+    }
+
+    const slug = (base.template_info?.name || 'prompt-template')
+      .replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
+    const blob = new Blob([JSON.stringify(base, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = slug + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   // ── Session Helpers ─────────────────────────────────────────────────────────
   function updateSession(idx, updates) {
     setSessions((prev) => prev.map((s, i) => (i === idx ? { ...s, ...updates } : s)));
@@ -175,9 +217,8 @@ function App() {
 
   // ── Run ─────────────────────────────────────────────────────────────────────
   async function runSession(idx) {
-    // Read always-current state via ref (avoids stale closure bugs)
-    const { sessions: curSessions, apiKeys: curKeys, variables: curVars, delimiters: curDelims, responseFormat: curFmt } = stateRef.current;
-    const s = curSessions[idx];
+    const { sessions: cur, apiKeys: curKeys, variables: curVars, delimiters: curDelims, responseFormat: curFmt } = stateRef.current;
+    const s = cur[idx];
     const providerName = s.params.provider;
     const keyMap = { openAi: 'openai', anthropic: 'anthropic' };
     const apiKey = curKeys[keyMap[providerName] || providerName];
@@ -219,7 +260,7 @@ function App() {
     });
   }
 
-  async function runBoth() {
+  function runBoth() {
     runSession(0);
     runSession(1);
   }
@@ -250,27 +291,26 @@ function App() {
   }
 
   const bothHaveResponses = sessions[0].response && sessions[1].response;
+  const hasContent = sessions[0].messages.length > 0 || rawFileData;
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return html`
     <div class="app">
 
-      <!-- Header -->
       <header class="header">
         <div class="header-left">
           <${FileLoader} onLoad=${loadFile} />
+          ${hasContent && html`
+            <button class="btn btn-sm" onClick=${downloadJson} title="Download current prompt as JSON">
+              ↓ Save
+            </button>
+          `}
           ${templateName && html`<span class="template-name">${templateName}</span>`}
         </div>
         <div class="header-center">
           <div class="mode-toggle">
-            <button
-              class=${'btn btn-sm' + (mode === 'single' ? ' active' : '')}
-              onClick=${() => switchMode('single')}
-            >Single</button>
-            <button
-              class=${'btn btn-sm' + (mode === 'split' ? ' active' : '')}
-              onClick=${() => switchMode('split')}
-            >Compare</button>
+            <button class=${'btn btn-sm' + (mode === 'single' ? ' active' : '')} onClick=${() => switchMode('single')}>Single</button>
+            <button class=${'btn btn-sm' + (mode === 'split' ? ' active' : '')} onClick=${() => switchMode('split')}>Compare</button>
           </div>
         </div>
         <div class="header-right">
@@ -280,25 +320,16 @@ function App() {
               onClick=${runBoth}
               disabled=${sessions[0].loading || sessions[1].loading}
             >
-              ${sessions[0].loading || sessions[1].loading
-                ? html`<span class="spinner"></span>`
-                : '▶▶'
-              } Run both
+              ${sessions[0].loading || sessions[1].loading ? html`<span class="spinner"></span>` : '▶▶'} Run both
             </button>
           `}
-          <button class="btn btn-ghost btn-sm" onClick=${() => setShowSettings(true)}>
-            ⚙ Settings
-          </button>
+          <button class="btn btn-ghost btn-sm" onClick=${() => setShowSettings(true)}>⚙ Settings</button>
         </div>
       </header>
 
-      <!-- Main -->
       <main class="main">
-
         ${mode === 'single' ? html`
           <div class="single-layout">
-
-            <!-- Sidebar -->
             <div class="sidebar">
               <${ParameterPanel}
                 key=${loadKey}
@@ -313,7 +344,6 @@ function App() {
               />
             </div>
 
-            <!-- Messages -->
             <div class="messages-column">
               <${MessageEditor}
                 messages=${sessions[0].messages}
@@ -321,7 +351,6 @@ function App() {
               />
             </div>
 
-            <!-- Response -->
             <div class="response-column">
               <div class="run-bar">
                 <button
@@ -330,10 +359,7 @@ function App() {
                   disabled=${sessions[0].loading}
                   style="width:100%"
                 >
-                  ${sessions[0].loading
-                    ? html`<span class="spinner"></span> Running...`
-                    : '▶ Run'
-                  }
+                  ${sessions[0].loading ? html`<span class="spinner"></span> Running…` : '▶ Run'}
                 </button>
               </div>
               <${ResponseDisplay}
@@ -345,12 +371,9 @@ function App() {
                 provider=${sessions[0].params.provider}
               />
             </div>
-
           </div>
         ` : html`
           <div class="split-layout">
-
-            <!-- Shared Variables Bar -->
             ${variableDefs.length > 0 && html`
               <div class="split-vars-bar">
                 <${VariablePanel}
@@ -362,7 +385,6 @@ function App() {
               </div>
             `}
 
-            <!-- Two Panes -->
             <div class="split-panes" style="flex:1;overflow:hidden">
               <${Pane}
                 session=${sessions[0]}
@@ -384,21 +406,15 @@ function App() {
               />
             </div>
 
-            <!-- Diff Bar -->
             ${bothHaveResponses && html`
               <div class="diff-bar">
-                <button class="btn btn-ghost btn-sm" onClick=${() => setShowDiff(true)}>
-                  ◑ Compare outputs
-                </button>
+                <button class="btn btn-ghost btn-sm" onClick=${() => setShowDiff(true)}>◑ Compare outputs</button>
               </div>
             `}
-
           </div>
         `}
-
       </main>
 
-      <!-- Modals -->
       ${showSettings && html`
         <${ApiKeyModal}
           apiKeys=${apiKeys}
@@ -416,7 +432,6 @@ function App() {
           onClose=${() => setShowDiff(false)}
         />
       `}
-
     </div>
   `;
 }
