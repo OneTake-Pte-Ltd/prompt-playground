@@ -279,6 +279,29 @@ html, body, #root {
   padding: 12px 14px 6px;
 }
 
+/* ─── Optional param toggle (Add / Remove) ───────────────────────────────── */
+.param-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 3px;
+}
+
+.param-opt-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.param-opt-btn.add  { color: var(--accent); }
+.param-opt-btn.add:hover  { color: var(--accent-hover); }
+.param-opt-btn.remove { color: var(--text-3); }
+.param-opt-btn.remove:hover { color: var(--error); }
+
 /* ─── Parameter Panel ────────────────────────────────────────────────────── */
 .param-panel { padding: 0 0 8px; }
 .param-panel.compact { padding: 0; }
@@ -300,6 +323,8 @@ html, body, #root {
   color: var(--text-3);
   letter-spacing: 0.05em;
   text-transform: uppercase;
+  margin-bottom: 3px;
+  display: block;
 }
 
 .param-slider-row {
@@ -500,8 +525,36 @@ input[type="number"]::-webkit-inner-spin-button { opacity: 0.4; }
   line-height: 1.6;
   resize: none;
   outline: none;
-  min-height: 60px;
+  /* Height is controlled by autoResize() in JS. overflow:hidden prevents
+     a scrollbar flash while the height is being set from 0 to scrollHeight. */
   overflow: hidden;
+  display: block;
+}
+
+/* Collapse toggle */
+.collapse-toggle {
+  padding: 1px 4px;
+  font-size: 10px;
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+.collapse-toggle:hover { color: var(--text-1); }
+
+/* Collapsed message preview — single line of text */
+.message-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  margin: 0 8px;
+}
+
+.message-item.collapsed .message-header {
+  border-bottom: none;
 }
 
 /* Array content blocks */
@@ -539,9 +592,9 @@ input[type="number"]::-webkit-inner-spin-button { opacity: 0.4; }
   line-height: 1.6;
   resize: none;
   outline: none;
-  min-height: 48px;
   padding: 6px 8px;
   overflow: hidden;
+  display: block;
 }
 
 .image-block-body {

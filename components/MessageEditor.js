@@ -1,9 +1,19 @@
 import { html, useState, useRef, useEffect } from '../lib.js';
 
+// Setting height to '0' first forces the browser to recalculate scrollHeight
+// from scratch, giving the true content height regardless of previous state.
 function autoResize(el) {
   if (!el) return;
-  el.style.height = 'auto';
-  el.style.height = el.scrollHeight + 'px';
+  el.style.height = '0';
+  el.style.height = Math.max(80, el.scrollHeight) + 'px';
+}
+
+function contentPreview(content) {
+  const text = Array.isArray(content)
+    ? content.filter((b) => b.type === 'text').map((b) => b.text).join(' ')
+    : content || '';
+  const trimmed = text.replace(/\s+/g, ' ').trim();
+  return trimmed.length > 100 ? trimmed.slice(0, 100) + '…' : trimmed;
 }
 
 function TextBlock({ block, onChange, onRemove }) {
@@ -24,11 +34,10 @@ function TextBlock({ block, onChange, onRemove }) {
       <textarea
         ref=${ref}
         class="block-textarea"
-        value=${block.text}
         placeholder="Text content..."
         spellcheck="false"
-        onInput=${(e) => { autoResize(e.target); onChange({ ...block, text: e.target.value }); }}
-      ></textarea>
+        onChange=${(e) => { autoResize(e.target); onChange({ ...block, text: e.target.value }); }}
+      >${block.text}</textarea>
     </div>
   `;
 }
@@ -65,18 +74,8 @@ function ImageBlock({ block, onChange, onRemove }) {
         <div class="image-info">
           <div class="image-label">${isData ? 'Local file (base64)' : 'URL'}</div>
           ${!isData && html`<div class="image-url-text">${url}</div>`}
-          <input
-            ref=${fileRef}
-            type="file"
-            accept="image/*"
-            class="hidden"
-            onChange=${handleFile}
-          />
-          <button
-            class="btn btn-ghost btn-xs"
-            style="margin-top:6px"
-            onClick=${() => fileRef.current?.click()}
-          >
+          <input ref=${fileRef} type="file" accept="image/*" class="hidden" onChange=${handleFile} />
+          <button class="btn btn-ghost btn-xs" style="margin-top:6px" onClick=${() => fileRef.current?.click()}>
             Replace with local file
           </button>
         </div>
@@ -86,43 +85,36 @@ function ImageBlock({ block, onChange, onRemove }) {
 }
 
 function MessageItem({ message, onChangeContent, onChangeRole, onDelete, onMoveUp, onMoveDown, isFirst, isLast }) {
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const textareaRef = useRef(null);
   const addImageRef = useRef(null);
   const isArray = Array.isArray(message.content);
 
+  // Resize on mount and whenever content changes
   useEffect(() => {
-    if (!isArray) autoResize(textareaRef.current);
-  }, [message.content, isArray]);
+    if (!isCollapsed && !isArray) {
+      autoResize(textareaRef.current);
+    }
+  }, [message.content, isArray, isCollapsed]);
 
   function handleAddImage(file) {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (e) => {
       const imageBlock = { type: 'image_url', image_url: { url: e.target.result } };
-      if (isArray) {
-        onChangeContent([...message.content, imageBlock]);
-      } else {
-        onChangeContent([{ type: 'text', text: message.content }, imageBlock]);
-      }
+      onChangeContent(isArray
+        ? [...message.content, imageBlock]
+        : [{ type: 'text', text: message.content }, imageBlock]
+      );
     };
     reader.readAsDataURL(file);
-  }
-
-  function handleAddTextBlock() {
-    if (isArray) {
-      onChangeContent([...message.content, { type: 'text', text: '' }]);
-    }
   }
 
   function handleConvertToPlain() {
     if (!isArray) return;
     const hasImages = message.content.some((b) => b.type === 'image_url' || b.type === 'image');
     if (hasImages && !confirm('This will remove all image blocks. Continue?')) return;
-    const text = message.content
-      .filter((b) => b.type === 'text')
-      .map((b) => b.text)
-      .join('\n');
-    onChangeContent(text);
+    onChangeContent(message.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n'));
   }
 
   function updateBlock(idx, block) {
@@ -136,20 +128,29 @@ function MessageItem({ message, onChangeContent, onChangeRole, onDelete, onMoveU
     onChangeContent(next.length === 0 ? '' : next);
   }
 
+  const preview = contentPreview(message.content);
+
   return html`
-    <div class="message-item">
+    <div class=${'message-item' + (isCollapsed ? ' collapsed' : '')}>
       <div class="message-header">
-        <select
-          class="role-select"
-          value=${message.role}
-          onChange=${(e) => onChangeRole(e.target.value)}
-        >
+        <button
+          class="btn btn-ghost btn-xs collapse-toggle"
+          onClick=${() => setIsCollapsed(!isCollapsed)}
+          title=${isCollapsed ? 'Expand' : 'Collapse'}
+        >${isCollapsed ? '▸' : '▾'}</button>
+
+        <select class="role-select" value=${message.role} onChange=${(e) => onChangeRole(e.target.value)}>
           <option value="system">system</option>
           <option value="user">user</option>
           <option value="assistant">assistant</option>
         </select>
+
+        ${isCollapsed && preview && html`
+          <span class="message-preview">${preview}</span>
+        `}
+
         <div class="message-actions">
-          ${isArray && html`
+          ${isArray && !isCollapsed && html`
             <button class="btn btn-ghost btn-xs" onClick=${handleConvertToPlain} title="Convert to plain text">Plain text</button>
           `}
           <button class="btn btn-ghost btn-xs" onClick=${onMoveUp} disabled=${isFirst} title="Move up">↑</button>
@@ -158,61 +159,62 @@ function MessageItem({ message, onChangeContent, onChangeRole, onDelete, onMoveU
         </div>
       </div>
 
-      <div class="message-body">
-        ${isArray
-          ? html`
-            <div class="content-blocks">
-              ${message.content.map((block, i) => {
-                if (block.type === 'image_url' || block.type === 'image') {
-                  return html`<${ImageBlock}
+      ${!isCollapsed && html`
+        <div class="message-body">
+          ${isArray
+            ? html`
+              <div class="content-blocks">
+                ${message.content.map((block, i) => {
+                  if (block.type === 'image_url' || block.type === 'image') {
+                    return html`<${ImageBlock}
+                      key=${i}
+                      block=${block}
+                      onChange=${(b) => updateBlock(i, b)}
+                      onRemove=${() => removeBlock(i)}
+                    />`;
+                  }
+                  return html`<${TextBlock}
                     key=${i}
                     block=${block}
                     onChange=${(b) => updateBlock(i, b)}
-                    onRemove=${() => removeBlock(i)}
+                    onRemove=${message.content.length > 1 ? () => removeBlock(i) : null}
                   />`;
-                }
-                return html`<${TextBlock}
-                  key=${i}
-                  block=${block}
-                  onChange=${(b) => updateBlock(i, b)}
-                  onRemove=${message.content.length > 1 ? () => removeBlock(i) : null}
-                />`;
-              })}
-            </div>
-            <div class="block-add-bar">
-              <button class="btn btn-ghost btn-xs" onClick=${handleAddTextBlock}>+ Text block</button>
-              <input
-                ref=${addImageRef}
-                type="file"
-                accept="image/*"
-                class="hidden"
-                onChange=${(e) => { handleAddImage(e.target.files?.[0]); e.target.value = ''; }}
-              />
-              <button class="btn btn-ghost btn-xs" onClick=${() => addImageRef.current?.click()}>+ Image block</button>
-            </div>
-          `
-          : html`
-            <textarea
-              ref=${textareaRef}
-              class="message-textarea"
-              value=${message.content}
-              placeholder=${`${message.role} message...`}
-              spellcheck="false"
-              onInput=${(e) => { autoResize(e.target); onChangeContent(e.target.value); }}
-            ></textarea>
-            <div class="block-add-bar">
-              <input
-                ref=${addImageRef}
-                type="file"
-                accept="image/*"
-                class="hidden"
-                onChange=${(e) => { handleAddImage(e.target.files?.[0]); e.target.value = ''; }}
-              />
-              <button class="btn btn-ghost btn-xs" onClick=${() => addImageRef.current?.click()}>+ Add image</button>
-            </div>
-          `
-        }
-      </div>
+                })}
+              </div>
+              <div class="block-add-bar">
+                <button class="btn btn-ghost btn-xs" onClick=${() => onChangeContent([...message.content, { type: 'text', text: '' }])}>+ Text block</button>
+                <input
+                  ref=${addImageRef}
+                  type="file"
+                  accept="image/*"
+                  class="hidden"
+                  onChange=${(e) => { handleAddImage(e.target.files?.[0]); e.target.value = ''; }}
+                />
+                <button class="btn btn-ghost btn-xs" onClick=${() => addImageRef.current?.click()}>+ Image block</button>
+              </div>
+            `
+            : html`
+              <textarea
+                ref=${textareaRef}
+                class="message-textarea"
+                placeholder=${`${message.role} message…`}
+                spellcheck="false"
+                onChange=${(e) => { autoResize(e.target); onChangeContent(e.target.value); }}
+              >${message.content}</textarea>
+              <div class="block-add-bar">
+                <input
+                  ref=${addImageRef}
+                  type="file"
+                  accept="image/*"
+                  class="hidden"
+                  onChange=${(e) => { handleAddImage(e.target.files?.[0]); e.target.value = ''; }}
+                />
+                <button class="btn btn-ghost btn-xs" onClick=${() => addImageRef.current?.click()}>+ Add image</button>
+              </div>
+            `
+          }
+        </div>
+      `}
     </div>
   `;
 }
@@ -243,7 +245,7 @@ export function MessageEditor({ messages, onChange }) {
       <div class="messages-area">
         ${messages.length === 0 && html`
           <div style="text-align:center;padding:32px;color:var(--text-3);font-size:12px">
-            No messages. Add a message below to get started.
+            No messages yet. Add one below.
           </div>
         `}
         ${messages.map((msg, i) => html`
