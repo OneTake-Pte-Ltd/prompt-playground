@@ -1,4 +1,4 @@
-import { html, useState, useRef, useEffect } from '../lib.js';
+import { html, useState, useRef, useEffect, useLayoutEffect } from '../lib.js';
 
 // Setting height to '0' first forces the browser to recalculate scrollHeight
 // from scratch, giving the true content height regardless of previous state.
@@ -8,18 +8,10 @@ function autoResize(el) {
   el.style.height = Math.max(80, el.scrollHeight) + 'px';
 }
 
-function contentPreview(content) {
-  const text = Array.isArray(content)
-    ? content.filter((b) => b.type === 'text').map((b) => b.text).join(' ')
-    : content || '';
-  const trimmed = text.replace(/\s+/g, ' ').trim();
-  return trimmed.length > 100 ? trimmed.slice(0, 100) + '…' : trimmed;
-}
-
 function TextBlock({ block, onChange, onRemove }) {
   const ref = useRef(null);
 
-  useEffect(() => { autoResize(ref.current); }, [block.text]);
+  useLayoutEffect(() => { autoResize(ref.current); }, [block.text]);
 
   return html`
     <div class="content-block">
@@ -90,8 +82,7 @@ function MessageItem({ message, onChangeContent, onChangeRole, onDelete, onMoveU
   const addImageRef = useRef(null);
   const isArray = Array.isArray(message.content);
 
-  // Resize on mount and whenever content changes
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isCollapsed && !isArray) {
       autoResize(textareaRef.current);
     }
@@ -128,8 +119,6 @@ function MessageItem({ message, onChangeContent, onChangeRole, onDelete, onMoveU
     onChangeContent(next.length === 0 ? '' : next);
   }
 
-  const preview = contentPreview(message.content);
-
   return html`
     <div class=${'message-item' + (isCollapsed ? ' collapsed' : '')}>
       <div class="message-header">
@@ -144,10 +133,6 @@ function MessageItem({ message, onChangeContent, onChangeRole, onDelete, onMoveU
           <option value="user">user</option>
           <option value="assistant">assistant</option>
         </select>
-
-        ${isCollapsed && preview && html`
-          <span class="message-preview">${preview}</span>
-        `}
 
         <div class="message-actions">
           ${isArray && !isCollapsed && html`
