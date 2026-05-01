@@ -3,6 +3,12 @@ import { useLocalStorage } from './utils/storage.js';
 import { normalizeMessages } from './utils/messages.js';
 import { applyVariablesToMessages } from './utils/variables.js';
 import { getProvider } from './providers/index.js';
+import {
+  walkExpected,
+  evalDeterministic,
+  buildJudgeMessages,
+  parseJudgeResponse,
+} from './utils/testRunner.js';
 import { ApiKeyModal } from './components/ApiKeyModal.js';
 import { FileLoader } from './components/FileLoader.js';
 import { ParameterPanel } from './components/ParameterPanel.js';
@@ -11,7 +17,6 @@ import { VariablePanel } from './components/VariablePanel.js';
 import { ResponseDisplay } from './components/ResponseDisplay.js';
 import { DiffViewer } from './components/DiffViewer.js';
 import { SaveModal } from './components/SaveModal.js';
-import { TestRunner } from './components/TestRunner.js';
 
 // ─── Service Worker ───────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
@@ -35,6 +40,8 @@ function defaultSession(params, messages) {
     loading: false,
     error: null,
     usage: null,
+    assertions: null,       // null = no tests loaded; [] = smoke test passed; [...] = results
+    assertionsRunning: false,
   };
 }
 
@@ -88,6 +95,8 @@ function Pane({ session, sessionIdx, label, paramKey, onUpdateSession, onRun, on
           error=${null}
           usage=${session.usage}
           provider=${session.params.provider}
+          assertions=${session.assertions}
+          assertionsRunning=${session.assertionsRunning}
         />
       </div>
     </div>
@@ -110,12 +119,11 @@ function App() {
   const [showDiff, setShowDiff] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveModalSessionIdx, setSaveModalSessionIdx] = useState(0);
-  const [showTests, setShowTests] = useState(false);
 
   // Always-current snapshot for async callbacks
   const stateRef = useRef({});
   useEffect(() => {
-    stateRef.current = { sessions, apiKeys, variables, delimiters, responseFormat };
+    stateRef.current = { sessions, apiKeys, variables, delimiters, responseFormat, rawFileData };
   });
 
   // ── File Loading ────────────────────────────────────────────────────────────
@@ -181,6 +189,110 @@ function App() {
     setSessions((prev) => prev.map((s, i) => (i === idx ? { ...s, ...updates } : s)));
   }
 
+  // ── Assertion Evaluation ────────────────────────────────────────────────────
+  async function runAssertions(idx, fullResponse) {
+    const snap = stateRef.current;
+    const performanceTests = snap.rawFileData?.template_info?.performance_tests || [];
+    if (!performanceTests.length) return;
+
+    const expectedOutput = performanceTests[0]?.expected_output;
+    if (expectedOutput === undefined || expectedOutput === null) return;
+
+    // Empty expected_output = smoke test (LLM ran without error, no assertions to check)
+    if (Object.keys(expectedOutput).length === 0) {
+      updateSession(idx, { assertions: [], assertionsRunning: false });
+      return;
+    }
+
+    const isJson = ['json_schema', 'json_object', 'json'].includes(snap.responseFormat?.type);
+    let actualParsed;
+
+    if (isJson) {
+      try {
+        actualParsed = JSON.parse(fullResponse);
+      } catch {
+        updateSession(idx, {
+          assertions: [{
+            path: '(parse error)',
+            assertion: { type: 'missing' },
+            actual: undefined,
+            pass: false,
+            details: 'Response is not valid JSON — cannot evaluate assertions',
+            pending: false,
+          }],
+          assertionsRunning: false,
+        });
+        return;
+      }
+    } else {
+      actualParsed = { _raw: fullResponse };
+    }
+
+    // Walk tree and evaluate deterministic assertions immediately
+    let assertions = walkExpected(expectedOutput, actualParsed).map(evalDeterministic);
+    const hasFuzzy = assertions.some((r) => r.pending);
+    updateSession(idx, { assertions: [...assertions], assertionsRunning: hasFuzzy });
+
+    if (!hasFuzzy) return;
+
+    // Evaluate fuzzy assertions one by one, updating state after each
+    const openaiProvider = getProvider('openAi');
+    const openaiKey = snap.apiKeys?.openai;
+
+    for (let i = 0; i < assertions.length; i++) {
+      if (!assertions[i].pending) continue;
+
+      if (!openaiKey) {
+        assertions[i] = {
+          ...assertions[i],
+          pending: false,
+          pass: false,
+          details: 'No OpenAI API key — cannot run fuzzy judge',
+        };
+        updateSession(idx, {
+          assertions: [...assertions],
+          assertionsRunning: assertions.some((r) => r.pending),
+        });
+        continue;
+      }
+
+      try {
+        const judgeMessages = buildJudgeMessages(assertions[i].actual, assertions[i].assertion.criterion);
+        let judgeRaw = '';
+        await openaiProvider.call({
+          apiKey: openaiKey,
+          params: { provider: 'openAi', model: 'gpt-5.4', temperature: 0, model_parameters: {} },
+          messages: judgeMessages,
+          responseFormat: { type: 'text' },
+          onChunk: (chunk) => { judgeRaw += chunk; },
+          onDone: () => {},
+          onError: (err) => { throw new Error(err); },
+        });
+        const result = parseJudgeResponse(judgeRaw);
+        assertions[i] = {
+          ...assertions[i],
+          pending: false,
+          pass: !!result.pass,
+          details: result.reason || null,
+        };
+      } catch (e) {
+        assertions[i] = {
+          ...assertions[i],
+          pending: false,
+          pass: false,
+          details: `Judge error: ${e.message}`,
+        };
+      }
+
+      updateSession(idx, {
+        assertions: [...assertions],
+        assertionsRunning: assertions.some((r) => r.pending),
+      });
+    }
+
+    updateSession(idx, { assertionsRunning: false });
+  }
+
   // ── Run ─────────────────────────────────────────────────────────────────────
   async function runSession(idx) {
     const { sessions: cur, apiKeys: curKeys, variables: curVars, delimiters: curDelims, responseFormat: curFmt } = stateRef.current;
@@ -201,7 +313,10 @@ function App() {
     }
 
     const processedMessages = applyVariablesToMessages(s.messages, curVars, curDelims);
-    updateSession(idx, { loading: true, response: '', error: null, usage: null });
+    updateSession(idx, { loading: true, response: '', error: null, usage: null, assertions: null, assertionsRunning: false });
+
+    let accumulatedResponse = '';
+    let hasError = false;
 
     await provider.call({
       apiKey,
@@ -209,6 +324,7 @@ function App() {
       messages: processedMessages,
       responseFormat: curFmt,
       onChunk: (chunk) => {
+        accumulatedResponse += chunk;
         setSessions((prev) =>
           prev.map((sess, i) => (i === idx ? { ...sess, response: sess.response + chunk } : sess))
         );
@@ -219,11 +335,16 @@ function App() {
         );
       },
       onError: (err) => {
+        hasError = true;
         setSessions((prev) =>
           prev.map((sess, i) => (i === idx ? { ...sess, loading: false, error: err } : sess))
         );
       },
     });
+
+    if (!hasError) {
+      await runAssertions(idx, accumulatedResponse);
+    }
   }
 
   function runBoth() {
@@ -249,6 +370,8 @@ function App() {
             loading: false,
             error: null,
             usage: null,
+            assertions: null,
+            assertionsRunning: false,
           },
         ];
       });
@@ -258,7 +381,6 @@ function App() {
 
   const bothHaveResponses = sessions[0].response && sessions[1].response;
   const hasContent = sessions[0].messages.length > 0 || rawFileData;
-  const performanceTests = rawFileData?.template_info?.performance_tests || [];
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return html`
@@ -281,11 +403,6 @@ function App() {
           </div>
         </div>
         <div class="header-right">
-          ${performanceTests.length > 0 && html`
-            <button class="btn btn-sm" onClick=${() => setShowTests(true)} title="Run test cases">
-              ⚑ Tests
-            </button>
-          `}
           ${mode === 'split' && html`
             <button
               class="btn btn-primary btn-sm"
@@ -341,6 +458,8 @@ function App() {
                 error=${sessions[0].error}
                 usage=${sessions[0].usage}
                 provider=${sessions[0].params.provider}
+                assertions=${sessions[0].assertions}
+                assertionsRunning=${sessions[0].assertionsRunning}
               />
             </div>
           </div>
@@ -416,17 +535,6 @@ function App() {
           responseFormat=${responseFormat}
           variables=${variables}
           onClose=${() => setShowSaveModal(false)}
-        />
-      `}
-
-      ${showTests && html`
-        <${TestRunner}
-          tests=${performanceTests}
-          sessions=${sessions}
-          responseFormat=${responseFormat}
-          delimiters=${delimiters}
-          apiKeys=${apiKeys}
-          onClose=${() => setShowTests(false)}
         />
       `}
     </div>

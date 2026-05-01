@@ -1,7 +1,7 @@
 import { html, useState, useMemo } from '../lib.js';
+import { formatExpected, formatActual } from '../utils/testRunner.js';
 
 function highlightJson(str) {
-  // HTML-escape first
   const escaped = str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -22,7 +22,55 @@ function highlightJson(str) {
   );
 }
 
-export function ResponseDisplay({ response, responseFormat, loading, error, usage, provider }) {
+// ─── Inline assertion panel ───────────────────────────────────────────────────
+function AssertionPanel({ assertions, running }) {
+  const [open, setOpen] = useState(true);
+
+  // assertions === null means no tests loaded at all — don't render anything
+  if (assertions === null) return null;
+
+  const isSmokeTest = assertions.length === 0;
+  const passed = assertions.filter((r) => r.pass === true).length;
+  const total = assertions.length;
+  const allPass = isSmokeTest || (!running && passed === total);
+
+  return html`
+    <div class="assertion-panel">
+      <button class="assertion-panel-header" onClick=${() => setOpen(!open)}>
+        <span class="assertion-panel-title">Assertions</span>
+        <span class=${'assert-badge ' + (allPass ? 'pass' : 'fail')}>
+          ${isSmokeTest ? 'Smoke PASS' : `${passed} / ${total}`}
+        </span>
+        ${running && html`<span class="spinner" style="width:9px;height:9px;border-width:1.5px;margin-left:4px"></span>`}
+        <span class="assertion-toggle-icon">${open ? '▾' : '▸'}</span>
+      </button>
+
+      ${open && !isSmokeTest && html`
+        <div class="assertion-list">
+          ${assertions.map((r, i) => html`
+            <div key=${i} class=${'assertion-row ' + (r.pending ? 'pending' : r.pass ? 'pass' : 'fail')}>
+              <span class="assertion-icon">
+                ${r.pending
+                  ? html`<span class="spinner" style="width:9px;height:9px;border-width:1.5px"></span>`
+                  : r.pass ? '✓' : '✗'
+                }
+              </span>
+              <span class="assertion-path" title=${r.path}>${r.path}</span>
+              <span class="assertion-type">${r.assertion.type}</span>
+              <span class="assertion-expected" title=${formatExpected(r.assertion)}>${formatExpected(r.assertion)}</span>
+              <span class="assertion-actual" title=${formatActual(r.actual)}>${formatActual(r.actual)}</span>
+              ${!r.pending && !r.pass && r.details && html`
+                <div class="assertion-detail">${r.details}</div>
+              `}
+            </div>
+          `)}
+        </div>
+      `}
+    </div>
+  `;
+}
+
+export function ResponseDisplay({ response, responseFormat, loading, error, usage, provider, assertions, assertionsRunning }) {
   const [copied, setCopied] = useState(false);
 
   const isJson = ['json_schema', 'json_object', 'json'].includes(responseFormat?.type);
@@ -80,6 +128,8 @@ export function ResponseDisplay({ response, responseFormat, loading, error, usag
           }
         `}
       </div>
+
+      <${AssertionPanel} assertions=${assertions} running=${assertionsRunning} />
 
       ${(usage || loading) && html`
         <div class="response-footer">
