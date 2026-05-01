@@ -303,7 +303,7 @@
           }
         },
         "input_variables": {
-          "description": "Defines all variables that can be injected into the prompt messages. Each object in this array groups a set of typed variable keys. The top-level `name` and `type` fields on each object are vestigial and not used by the runtime — only `keys` is consumed. Standard variables to include in almost every prompt: `custom_instructions` (string) — caller-supplied instructions that override or extend default behaviour; `custom_vocabulary` (string) — caller-supplied terminology or brand glossary. Additionally, include `user_language` (string) whenever any output field will be displayed to the end user. For each of these standard variables: provide realistic example values in the few-shot examples in `llm_parameters.messages`, and inject them in the final user message.",
+          "description": "Defines all variables that can be injected into the prompt messages. Each object in this array groups a set of typed variable keys. The top-level `name` and `type` fields on each object are vestigial and not used by the runtime — only `keys` is consumed. Standard variables to include in almost every prompt: `CUSTOM_INSTRUCTIONS` (string) — caller-supplied instructions that override or extend default behaviour; `CUSTOM_VOCABULARY` (string) — caller-supplied terminology or brand glossary. Additionally, include `USER_LANGUAGE` (string) whenever any output field will be displayed to the end user. For each of these standard variables: provide realistic example values in the few-shot examples in `llm_parameters.messages`, and inject them in the final user message.",
           "type": "array",
           "items": {
             "description": "A grouping of input variable key definitions. Only `keys` is meaningful; `name` and `type` at this level are vestigial.",
@@ -327,7 +327,7 @@
                   "required": ["name", "type"],
                   "properties": {
                     "name": {
-                      "description": "Variable name exactly as it appears between the input delimiters in the prompt messages. Use snake_case (e.g. 'user_language', 'custom_instructions'). Case-sensitive.",
+                      "description": "Variable name exactly as it appears between the input delimiters in the prompt messages. Use snake_case (e.g. 'USER_LANGUAGE', 'CUSTOM_INSTRUCTIONS'). Case-sensitive.",
                       "type": "string",
                       "minLength": 1
                     },
