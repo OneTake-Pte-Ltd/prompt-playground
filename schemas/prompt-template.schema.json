@@ -305,18 +305,10 @@
           "description": "Defines all variables that can be injected into the prompt messages. Each object in this array groups a set of typed variable keys. The top-level `name` and `type` fields on each object are vestigial and not used by the runtime — only `keys` is consumed.\n\nIMPORTANT — prompt caching: variable placeholders should appear only in the final user message. Avoid placing them in the system prompt or in few-shot example (user/assistant) messages. Prompt caching (which eliminates redundant compute cost on repeated calls) only activates when the leading prefix of the conversation — system prompt plus all messages except the last — is byte-for-byte identical across calls. Any variable substitution in that prefix produces a different byte sequence each call, defeating the cache entirely.",
           "type": "array",
           "items": {
-            "description": "A grouping of input variable key definitions. Only `keys` is meaningful; `name` and `type` at this level are vestigial.",
+            "description": "A grouping of input variable key definitions.",
             "type": "object",
             "required": ["keys"],
             "properties": {
-              "name": {
-                "description": "Vestigial field — not used by the runtime. Kept for backwards compatibility with earlier versions of the format.",
-                "type": "string"
-              },
-              "type": {
-                "description": "Vestigial field — not used by the runtime. Kept for backwards compatibility with earlier versions of the format.",
-                "type": "string"
-              },
               "keys": {
                 "description": "The actual list of named, typed variables that will be substituted into the prompt messages at runtime.",
                 "type": "array",
