@@ -23,7 +23,6 @@ components/
   ParameterPanel.js       LLM params (provider, model, sliders)
   ResponseDisplay.js      Streaming response with JSON highlighting
   SaveModal.js            Save-as-JSON modal with editable metadata
-  TestRunner.js           Performance test runner modal
   VariablePanel.js        Template variable inputs
 providers/
   index.js                Provider registry + SSE stream parser
@@ -120,18 +119,31 @@ For `response_format.type = "text"`, `expected_output._raw` holds assertions on 
 
 ---
 
+## Inline assertion evaluation
+After each LLM response completes, `app.js` automatically calls `runAssertions(idx, fullResponse)`. This walks `performance_tests[0].expected_output` against the response and evaluates assertions. Results are stored in `session.assertions` and displayed inline in `ResponseDisplay` via the `AssertionPanel` sub-component.
+
+- `session.assertions === null` → no tests defined (panel hidden)
+- `session.assertions === []` → smoke test (empty `expected_output`), shown as "Smoke PASS"
+- `session.assertions = [...]` → results array, shown as a compact row-per-assertion list
+
+Fuzzy assertions call OpenAI `gpt-5.4` as a judge and resolve asynchronously, each row updating individually as results arrive.
+
+Both panes in Compare mode get their own assertions evaluated independently after their respective responses complete, so you can see side-by-side which variant passes.
+
+---
+
 ## Save modal
 `SaveModal` has two sections:
 1. Simple fields: `name`, `id`, `description`, `playground_prompt_id`
 2. Advanced: full `template_info` (minus above 4 fields) as editable JSON textarea
 
-`buildJsonOutput()` (exported from `SaveModal.js`) builds the final JSON structure — used for both the modal download and can be reused elsewhere.
+`buildJsonOutput()` (exported from `SaveModal.js`) builds the final JSON structure.
 
 ---
 
 ## Gotchas
 - Anthropic doesn't support `json_object` response format — the warning banner in `ResponseDisplay` covers this
 - `useLayoutEffect` is needed for textarea auto-resize; `useEffect` fires too late and causes a flash
-- The `stateRef` pattern is essential for `runSession` — without it, `onChunk` callbacks capture stale session state
+- The `stateRef` pattern is essential for `runSession` — without it, `onChunk` callbacks capture stale session state; `rawFileData` is included in stateRef so `runAssertions` can read it
 - Strip `\`\`\`json` fences from any LLM response you expect to parse as JSON (fuzzy judge, etc.)
-- `gpt-5.4` is the hardcoded judge model for fuzzy assertions in `TestRunner.js`
+- `gpt-5.4` is the hardcoded judge model for fuzzy assertions

@@ -978,194 +978,118 @@ input[type="number"]::-webkit-inner-spin-button { opacity: 0.4; }
   overflow-y: auto;
 }
 
-/* ─── Test Runner ────────────────────────────────────────────────────────── */
-.tr-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 18px;
+/* ─── Inline Assertion Panel ─────────────────────────────────────────────── */
+.assertion-panel {
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  font-size: 11px;
 }
 
-.tr-summary {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 2px 10px;
-  border-radius: 99px;
-}
-
-.tr-summary.pass { background: rgba(16,163,127,0.15); color: var(--accent); }
-.tr-summary.fail { background: var(--error-bg); color: var(--error); }
-
-.tr-case {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-2);
-  overflow: hidden;
-}
-
-.tr-case-header {
+.assertion-panel-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--bg-3);
-  border-bottom: 1px solid var(--border);
-}
-
-.tr-case-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
   color: var(--text-2);
 }
 
-.tr-case-body {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
+.assertion-panel-header:hover { background: var(--bg-3); }
 
-.tr-section-label {
+.assertion-panel-title {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-3);
-  margin-bottom: 6px;
-  display: block;
 }
 
-.tr-inputs { }
-
-.tr-input-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.assert-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 99px;
+  letter-spacing: 0.04em;
+  font-family: var(--font-ui);
 }
 
-.tr-input-item {
-  display: flex;
-  gap: 8px;
-  font-size: 11px;
-  font-family: var(--font-mono);
-}
+.assert-badge.pass { background: rgba(16,163,127,0.15); color: var(--accent); }
+.assert-badge.fail { background: var(--error-bg); color: var(--error); }
 
-.tr-input-key {
+.assertion-toggle-icon {
+  margin-left: auto;
+  font-size: 10px;
   color: var(--text-3);
-  flex-shrink: 0;
-  min-width: 140px;
 }
 
-.tr-input-val {
+.assertion-list {
+  border-top: 1px solid var(--border);
+}
+
+.assertion-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0,2fr) 80px minmax(0,1.2fr) minmax(0,1.5fr);
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.assertion-row:last-child { border-bottom: none; }
+.assertion-row.pass { background: rgba(16,163,127,0.04); }
+.assertion-row.fail { background: rgba(239,68,68,0.04); }
+.assertion-row.pending { background: transparent; }
+
+/* When there's a detail line, span it across the full grid */
+.assertion-detail {
+  grid-column: 2 / -1;
+  font-size: 10px;
+  color: var(--error);
+  font-family: var(--font-ui);
+  word-break: break-word;
+  padding-bottom: 2px;
+}
+
+.assertion-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+
+.assertion-row.pass .assertion-icon { color: var(--accent); }
+.assertion-row.fail .assertion-icon { color: var(--error); }
+
+.assertion-path {
+  color: #9cdcfe;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assertion-type {
+  color: var(--text-3);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.assertion-expected {
   color: var(--text-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.tr-response-section { }
-
-.tr-response-details { margin-top: 4px; }
-
-.tr-response-summary {
-  font-size: 11px;
-  color: var(--text-3);
-  cursor: pointer;
-  user-select: none;
-  padding: 2px 0;
-}
-
-.tr-response-summary:hover { color: var(--text-2); }
-
-.tr-response-pre {
-  margin-top: 6px;
-  background: var(--bg-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-all;
-  max-height: 300px;
-  overflow-y: auto;
+.assertion-actual {
   color: var(--text-1);
-}
-
-.tr-smoke {
-  font-size: 11px;
-  color: var(--text-3);
-  font-style: italic;
-  padding: 4px 0;
-}
-
-/* Assertion results table */
-.tr-table-wrap {
-  overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-
-.tr-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 11px;
-  font-family: var(--font-mono);
-}
-
-.tr-table th {
-  background: var(--bg-4);
-  color: var(--text-3);
-  font-weight: 600;
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 6px 10px;
-  text-align: left;
-  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.tr-table td {
-  padding: 6px 10px;
-  vertical-align: top;
-  border-bottom: 1px solid var(--border);
-  line-height: 1.5;
-}
-
-.tr-table tr:last-child td { border-bottom: none; }
-
-.tr-row-pass { background: rgba(16,163,127,0.04); }
-.tr-row-fail { background: rgba(239,68,68,0.05); }
-.tr-row-pending { background: transparent; }
-
-.tr-cell-path { color: #9cdcfe; max-width: 200px; word-break: break-all; }
-.tr-cell-type { color: var(--text-3); white-space: nowrap; }
-.tr-cell-expected { color: var(--text-2); max-width: 200px; word-break: break-word; }
-.tr-cell-actual { color: var(--text-1); max-width: 240px; word-break: break-all; }
-.tr-cell-result { white-space: nowrap; }
-
-.tr-badge {
-  display: inline-block;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 7px;
-  border-radius: 99px;
-  letter-spacing: 0.05em;
-  font-family: var(--font-ui);
-}
-
-.tr-badge.pass { background: rgba(16,163,127,0.15); color: var(--accent); }
-.tr-badge.fail { background: var(--error-bg); color: var(--error); }
-
-.tr-fail-reason {
-  font-size: 10px;
-  color: var(--error);
-  margin-top: 3px;
-  font-family: var(--font-ui);
-  word-break: break-word;
-  max-width: 240px;
 }
