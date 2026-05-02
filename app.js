@@ -128,7 +128,7 @@ function App() {
   });
 
   // ── File Loading ────────────────────────────────────────────────────────────
-  async function loadFile(data) {
+  function loadFile(data) {
     setRawFileData(data);
 
     const lp = data.llm_parameters || {};
@@ -165,27 +165,6 @@ function App() {
 
     setVariableDefs(defs);
     setVariables(vars);
-
-    // Async: fetch snippet files for variables that have a non-empty source path
-    const sourcedDefs = defs.filter((d) => d.source && d.source.trim());
-    if (sourcedDefs.length > 0) {
-      const fetched = await Promise.all(
-        sourcedDefs.map(async (d) => {
-          try {
-            const res = await fetch(d.source.trim());
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return [d.name, await res.text()];
-          } catch {
-            return [d.name, ''];
-          }
-        })
-      );
-      setVariables((prev) => {
-        const next = { ...prev };
-        for (const [name, content] of fetched) next[name] = content;
-        return next;
-      });
-    }
     setResponseFormat(data.response_format || { type: 'text' });
     setDelimiters(data.template_info?.input_delimiters || ['<%', '%>']);
     setTemplateName(data.template_info?.name || '');

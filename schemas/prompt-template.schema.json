@@ -391,7 +391,7 @@
                       "enum": ["string", "number", "boolean", "array", "object"]
                     },
                     "source": {
-                      "description": "Optional path to a snippet file whose contents will be used as this variable's value, relative to the app root (e.g. 'snippets/scene-layout-definitions.md'). When present and non-empty, the playground fetches the file at load time and populates the variable automatically — the input is shown as read-only in the UI. When absent or empty, the value is supplied by the API caller or entered manually in the playground.",
+                      "description": "Optional path to a snippet file whose contents will be used as this variable's value, relative to /assets/ (e.g. 'snippets/scene-layout-definitions.md'). When present and non-empty, the server fetches the file at load time and populates the variable automatically. When absent or empty, the value is supplied by the API caller.",
                       "type": "string"
                     }
                   }
