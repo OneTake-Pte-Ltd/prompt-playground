@@ -11,6 +11,22 @@ function VarInput({ def, value, onChange }) {
 
   useEffect(() => { autoResize(ref.current); }, [value]);
 
+  // Variables with a source path are loaded from a file — read-only in the UI
+  if (def.source && def.source.trim()) {
+    return html`
+      <div class="var-sourced">
+        <span class="var-source-path" title=${def.source.trim()}>${def.source.trim()}</span>
+        <textarea
+          ref=${ref}
+          class="var-textarea var-textarea-readonly"
+          value=${value}
+          readOnly
+          spellcheck="false"
+        ></textarea>
+      </div>
+    `;
+  }
+
   if (def.type === 'number') {
     return html`
       <input

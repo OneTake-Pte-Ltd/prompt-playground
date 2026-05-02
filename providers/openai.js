@@ -14,7 +14,7 @@ export async function callOpenAI({ apiKey, params, messages, responseFormat, onC
   if (params.temperature !== undefined && params.temperature !== null) {
     body.temperature = params.temperature;
   }
-  if (params.max_tokens) body.max_tokens = params.max_tokens;
+  if (params.max_completion_tokens) body.max_completion_tokens = params.max_completion_tokens;
   if (params.top_p !== undefined && params.top_p !== null) body.top_p = params.top_p;
   if (params.frequency_penalty !== undefined && params.frequency_penalty !== null) {
     body.frequency_penalty = params.frequency_penalty;

@@ -668,6 +668,24 @@ input[type="number"]::-webkit-inner-spin-button { opacity: 0.4; }
 
 .var-textarea:focus { border-color: var(--accent); }
 
+.var-textarea-readonly {
+  opacity: 0.55;
+  cursor: default;
+  border-style: dashed;
+}
+
+.var-sourced { display: flex; flex-direction: column; gap: 3px; }
+
+.var-source-path {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
 /* Inline (split mode) variable bar */
 .var-panel-inline {
   display: flex;

@@ -1,5 +1,5 @@
 import { html, useState, useMemo } from '../lib.js';
-import { formatExpected, formatActual } from '../utils/testRunner.js';
+import { formatExpected, formatActual, stripJsonFences } from '../utils/testRunner.js';
 
 function highlightJson(str) {
   const escaped = str
@@ -80,7 +80,7 @@ export function ResponseDisplay({ response, responseFormat, loading, error, usag
     if (!response || loading) return { formatted: response || '', highlighted: null };
     if (!isJson) return { formatted: response, highlighted: null };
     try {
-      const pretty = JSON.stringify(JSON.parse(response), null, 2);
+      const pretty = JSON.stringify(JSON.parse(stripJsonFences(response)), null, 2);
       return { formatted: pretty, highlighted: highlightJson(pretty) };
     } catch {
       return { formatted: response, highlighted: null };

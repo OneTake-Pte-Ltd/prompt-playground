@@ -8,6 +8,7 @@ import {
   evalDeterministic,
   buildJudgeMessages,
   parseJudgeResponse,
+  stripJsonFences,
 } from './utils/testRunner.js';
 import { ApiKeyModal } from './components/ApiKeyModal.js';
 import { FileLoader } from './components/FileLoader.js';
@@ -127,13 +128,13 @@ function App() {
   });
 
   // ── File Loading ────────────────────────────────────────────────────────────
-  function loadFile(data) {
+  async function loadFile(data) {
     setRawFileData(data);
 
     const lp = data.llm_parameters || {};
     const STANDARD = new Set([
-      'provider', 'model', 'temperature', 'max_tokens', 'top_p',
-      'frequency_penalty', 'presence_penalty', 'messages', 'model_parameters',
+      'provider', 'model', 'temperature', 'max_completion_tokens', 'max_tokens',
+      'top_p', 'frequency_penalty', 'presence_penalty', 'messages', 'model_parameters',
     ]);
 
     const modelParams = { ...(lp.model_parameters || {}) };
@@ -147,7 +148,9 @@ function App() {
       model_parameters: modelParams,
     };
     if (lp.temperature != null)        params.temperature = lp.temperature;
-    if (lp.max_tokens != null)         params.max_tokens = lp.max_tokens;
+    // Accept both the new name and the legacy name from older files
+    const maxTok = lp.max_completion_tokens ?? lp.max_tokens;
+    if (maxTok != null)                params.max_completion_tokens = maxTok;
     if (lp.top_p != null)              params.top_p = lp.top_p;
     if (lp.frequency_penalty != null)  params.frequency_penalty = lp.frequency_penalty;
     if (lp.presence_penalty != null)   params.presence_penalty = lp.presence_penalty;
@@ -162,6 +165,27 @@ function App() {
 
     setVariableDefs(defs);
     setVariables(vars);
+
+    // Async: fetch snippet files for variables that have a non-empty source path
+    const sourcedDefs = defs.filter((d) => d.source && d.source.trim());
+    if (sourcedDefs.length > 0) {
+      const fetched = await Promise.all(
+        sourcedDefs.map(async (d) => {
+          try {
+            const res = await fetch(d.source.trim());
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return [d.name, await res.text()];
+          } catch {
+            return [d.name, ''];
+          }
+        })
+      );
+      setVariables((prev) => {
+        const next = { ...prev };
+        for (const [name, content] of fetched) next[name] = content;
+        return next;
+      });
+    }
     setResponseFormat(data.response_format || { type: 'text' });
     setDelimiters(data.template_info?.input_delimiters || ['<%', '%>']);
     setTemplateName(data.template_info?.name || '');
@@ -209,7 +233,7 @@ function App() {
 
     if (isJson) {
       try {
-        actualParsed = JSON.parse(fullResponse);
+        actualParsed = JSON.parse(stripJsonFences(fullResponse));
       } catch {
         updateSession(idx, {
           assertions: [{
