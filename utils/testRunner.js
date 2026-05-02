@@ -149,8 +149,12 @@ export function buildJudgeMessages(actualValue, criterion) {
   ];
 }
 
-// Parse judge JSON response, stripping ```json ... ``` fences if present
+// Strip leading/trailing markdown code fences (```json ... ```) from a string
+export function stripJsonFences(raw) {
+  return raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '');
+}
+
+// Parse judge JSON response, stripping fences if present
 export function parseJudgeResponse(raw) {
-  const stripped = raw.trim().replace(/^```json\s*/i, '').replace(/\s*```$/, '');
-  return JSON.parse(stripped);
+  return JSON.parse(stripJsonFences(raw));
 }

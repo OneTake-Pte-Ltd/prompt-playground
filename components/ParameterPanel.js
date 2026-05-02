@@ -156,7 +156,7 @@ export function ParameterPanel({ params, onChange, compact = false }) {
       </div>
 
       <${OptionalSlider} label="Temperature" field="temperature" params=${params} onChange=${onChange} min=${0} max=${2} step=${0.01} defaultVal=${1} />
-      <${OptionalInt}    label="Max tokens"  field="max_tokens"  params=${params} onChange=${onChange} defaultVal=${2048} />
+      <${OptionalInt}    label="Max completion tokens"  field="max_completion_tokens"  params=${params} onChange=${onChange} defaultVal=${2048} />
       <${OptionalSlider} label="Top P"       field="top_p"       params=${params} onChange=${onChange} min=${0} max=${1} step=${0.01} defaultVal=${1} />
 
       ${!isAnthropic && html`

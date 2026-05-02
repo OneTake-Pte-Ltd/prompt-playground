@@ -74,8 +74,8 @@
           "minimum": 0,
           "maximum": 2
         },
-        "max_tokens": {
-          "description": "Maximum number of tokens the model may generate in its response. Set this to accommodate the largest realistic output, including any intermediary steps. Omit to use the provider's default.",
+        "max_completion_tokens": {
+          "description": "Maximum number of tokens the model may generate in its response. Set this to accommodate the largest realistic output, including any intermediary steps. Omit to use the provider's default. Forwarded as max_completion_tokens to OpenAI and as max_tokens to Anthropic.",
           "type": "integer",
           "minimum": 1
         },
@@ -389,6 +389,10 @@
                       "description": "JSON data type of the variable's value. 'string' is the most common; use 'array' or 'object' when the variable contains structured data that will be serialized to JSON before injection.",
                       "type": "string",
                       "enum": ["string", "number", "boolean", "array", "object"]
+                    },
+                    "source": {
+                      "description": "Optional path to a snippet file whose contents will be used as this variable's value, relative to /assets/ (e.g. 'snippets/scene-layout-definitions.md'). When present and non-empty, the server fetches the file at load time and populates the variable automatically. When absent or empty, the value is supplied by the API caller.",
+                      "type": "string"
                     }
                   }
                 }

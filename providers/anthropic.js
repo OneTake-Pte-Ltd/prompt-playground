@@ -6,7 +6,7 @@ export async function callAnthropic({ apiKey, params, messages, onChunk, onDone,
 
   const body = {
     model: params.model,
-    max_tokens: params.max_tokens || 2048,
+    max_tokens: params.max_completion_tokens || 2048,
     messages: anthropicMessages,
     stream: true,
   };
@@ -15,7 +15,7 @@ export async function callAnthropic({ apiKey, params, messages, onChunk, onDone,
   if (params.temperature !== undefined && params.temperature !== null) {
     body.temperature = params.temperature;
   }
-  if (params.top_p !== undefined && params.top_p !== null) body.top_p = params.top_p;
+  // top_p and other OpenAI-specific params are intentionally not forwarded to Anthropic.
 
   // Anthropic doesn't support frequency/presence penalties — they're silently omitted.
   // Merge model_parameters (e.g. thinking: { type: "enabled", budget_tokens: 5000 })
